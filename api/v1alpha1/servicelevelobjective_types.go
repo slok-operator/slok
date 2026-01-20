@@ -22,7 +22,26 @@ import (
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
+type SLI struct {
+	Query string `json:"query"`
+}
+type Objective struct {
+	// name is the unique name of the objective within the Service Level Objective.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=100
+	// +required
+	Name string `json:"name"`
+	// targetPercentage is the target percentage for the objective (e.g., 99.9).
+    // Target as percentage (e.g. 99.9, 95.5)
+    // +kubebuilder:validation:Minimum=0
+    // +kubebuilder:validation:Maximum=200
+    Target float64 `json:"target"`
+	// window is the time window over which the objective is measured (e.g., "30d" for 30 days).
+	// +kubebuilder:validation:Pattern=`^(\d+d|\d+h|\d+m|\d+s)$`
+	// +required
+	Window string  `json:"window"`
+	Sli  SLI     `json:"sli"`
+}
 // ServiceLevelObjectiveSpec defines the desired state of ServiceLevelObjective
 type ServiceLevelObjectiveSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -30,19 +49,62 @@ type ServiceLevelObjectiveSpec struct {
 	// The following markers will use OpenAPI v3 schema to validate the value
 	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
 
-	// foo is an example field of ServiceLevelObjective. Edit servicelevelobjective_types.go to remove/update
-	// +optional
-	Foo *string `json:"foo,omitempty"`
+	// displayName is the human-readable name for the Service Level Objective.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	// +required
+	DisplayName string `json:"displayName"`
+
+	// objectives is a list of individual objectives that make up the Service Level Objective.
+	// +kubebuilder:validation:MinItems=1
+	// +required
+	Objectives []Objective `json:"objectives"`
+}
+// ErrorBudgetStatus represents error budget consumption
+type ErrorBudgetStatus struct {
+	// Total error budget for the window (e.g., "43.2m" for 43.2 minutes)
+	Total string `json:"total"`
+
+	// Consumed error budget so far (e.g., "10.5m")
+	Consumed string `json:"consumed"`
+
+	// Remaining error budget (e.g., "32.7m")
+	Remaining string `json:"remaining"`
+
+	// PercentRemaining is the percentage of budget left (e.g., 75.69)
+	PercentRemaining float64 `json:"percentRemaining"`
 }
 
+type ObjectiveStatus struct {
+	// Name of the objective (matches Objective.Name)
+	Name string `json:"name"`
+
+	// Target percentage (copied from spec for convenience)
+	Target float64 `json:"target"`
+
+	// Actual current percentage (e.g., 99.87)
+	Actual float64 `json:"actual"`
+
+	// Status indicates if objective is being met
+	// +kubebuilder:validation:Enum=met;at-risk;violated;unknown
+	Status string `json:"status"`
+
+	// ErrorBudget details
+	ErrorBudget ErrorBudgetStatus `json:"errorBudget"`
+
+	// LastQueried is when we last queried Prometheus
+	// +optional
+	LastQueried metav1.Time `json:"lastQueried,omitempty"`
+}
 // ServiceLevelObjectiveStatus defines the observed state of ServiceLevelObjective.
 type ServiceLevelObjectiveStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// objectives represent the current status of each objective defined in the spec.
+	// +optional
+	Objectives []ObjectiveStatus `json:"objectives,omitempty"`
 
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
+    // lastUpdateTime indicates the last time the status was updated.
+	// +optional
+	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
 	// conditions represent the current state of the ServiceLevelObjective resource.
 	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
 	//
