@@ -18,19 +18,26 @@ package controller
 
 import (
 	"context"
+	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
+	"github.com/federicolepera/slok/internal/errorbudget"
+	"github.com/federicolepera/slok/internal/prometheus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ServiceLevelObjectiveReconciler reconciles a ServiceLevelObjective object
 type ServiceLevelObjectiveReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	PrometheusClient *prometheus.Client
+	PrometheusURL    string
 }
 
 // +kubebuilder:rbac:groups=observability.slok.io,resources=servicelevelobjectives,verbs=get;list;watch;create;update;patch;delete
@@ -47,11 +54,111 @@ type ServiceLevelObjectiveReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.1/pkg/reconcile
 func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
-	// TODO(user): your logic here
+	var slo observabilityv1alpha1.ServiceLevelObjective
+	if err := r.Get(ctx, req.NamespacedName, &slo); err != nil {
+		logger.Error(err, "unable to fetch ServiceLevelObjective")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
 
-	return ctrl.Result{}, nil
+	//Initialize Prometheus client if not already done
+	if r.PrometheusClient == nil {
+		if r.PrometheusURL == "" {
+			promURL := "http://localhost:9090" //Default Prometheus URL
+			r.PrometheusURL = promURL
+		}
+		if promClient, err := prometheus.NewClient(r.PrometheusURL);  err != nil {
+			logger.Error(err, "unable to create Prometheus client", "prometheus_url", r.PrometheusURL)
+			return ctrl.Result{}, err
+		} else {
+			r.PrometheusClient = promClient
+			logger.Info("prometheus client initialized")
+		}
+	}
+
+	//Check Prometheus connection
+	if err := r.PrometheusClient.CheckConnection(ctx); err != nil {
+		logger.Error(err, "unable to connect to Prometheus", "prometheus_url", r.PrometheusURL)
+		return ctrl.Result{}, err
+	}
+
+	objectiveStatuses := make([]observabilityv1alpha1.ObjectiveStatus, 0)
+
+	logger.Info("init reconcile ServiceLevelObjective", "name", slo.Name)
+
+	for _, obj := range slo.Spec.Objectives {
+		logger.Info("Objective", "name", obj.Name, "target", obj.Target, "window", obj.Window, "sli_query", obj.Sli.Query)
+		sliValue, err := r.PrometheusClient.QuerySLI(ctx, obj.Sli.Query)
+		if err != nil {
+			logger.Error(err, "unable to query SLI", "sli_query", obj.Sli.Query)
+			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
+				Name:   obj.Name,
+				Target: obj.Target,
+				Status: "unknown",
+				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+					Total: "unknown",
+					Consumed: "unknown",
+					Remaining: "unknown",
+					PercentRemaining: 0,
+				},
+				LastQueried: metav1.Now(),
+			})
+			continue
+		}
+		//Determine status
+		logger.Info("SLI value", "objective_name", obj.Name, "sli_value", sliValue)
+
+		budget, err := errorbudget.Calculate(obj.Target, sliValue, obj.Window)
+		if err != nil {
+			logger.Error(err, "unable to calculate error budget", "objective_name", obj.Name)
+			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
+				Name:   obj.Name,
+				Target: obj.Target,
+				Actual: sliValue,
+				Status: "unknown",
+				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+					Total: "unknown",
+					Consumed: "unknown",
+					Remaining: "unknown",
+					PercentRemaining: 0,
+				},
+				LastQueried: metav1.Now(),
+			})
+			continue
+		}
+		status := errorbudget.DetermineStatus(obj.Target, sliValue, budget.PercentRemaining)
+		objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
+			Name:   obj.Name,
+			Target: obj.Target,
+			Actual: sliValue,
+			Status: status,
+			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+				Total: budget.Total,
+				Consumed: budget.Consumed,
+				Remaining: budget.Remaining,
+				PercentRemaining: budget.PercentRemaining,
+			},
+			LastQueried: metav1.Now(),
+		})
+	}
+	slo.Status.Objectives = objectiveStatuses
+	slo.Status.LastUpdateTime = metav1.Now()
+
+	meta.SetStatusCondition(&slo.Status.Conditions, metav1.Condition{
+		Type:   "Available",
+		Status: metav1.ConditionTrue,
+		Reason: "Reconciled",
+	})
+		if err := r.Status().Update(ctx, &slo); err != nil {
+		logger.Error(err, "Failed to update SLO status")
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("Successfully reconciled SLO")
+
+	// Requeue after 1 minute
+	return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
