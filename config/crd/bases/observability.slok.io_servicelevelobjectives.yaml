@@ -1,0 +1,235 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: servicelevelobjectives.observability.slok.io
+spec:
+  group: observability.slok.io
+  names:
+    kind: ServiceLevelObjective
+    listKind: ServiceLevelObjectiveList
+    plural: servicelevelobjectives
+    singular: servicelevelobjective
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ServiceLevelObjective is the Schema for the servicelevelobjectives
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of ServiceLevelObjective
+            properties:
+              displayName:
+                description: displayName is the human-readable name for the Service
+                  Level Objective.
+                maxLength: 255
+                minLength: 1
+                type: string
+              objectives:
+                description: objectives is a list of individual objectives that make
+                  up the Service Level Objective.
+                items:
+                  properties:
+                    name:
+                      description: name is the unique name of the objective within
+                        the Service Level Objective.
+                      maxLength: 100
+                      minLength: 1
+                      type: string
+                    sli:
+                      description: |-
+                        EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+                        NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+                      properties:
+                        query:
+                          type: string
+                      required:
+                      - query
+                      type: object
+                    target:
+                      description: |-
+                        targetPercentage is the target percentage for the objective (e.g., 99.9).
+                        Target as percentage (e.g. 99.9, 95.5)
+                      maximum: 200
+                      minimum: 0
+                      type: number
+                    window:
+                      description: window is the time window over which the objective
+                        is measured (e.g., "30d" for 30 days).
+                      pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                      type: string
+                  required:
+                  - name
+                  - sli
+                  - target
+                  - window
+                  type: object
+                minItems: 1
+                type: array
+            required:
+            - displayName
+            - objectives
+            type: object
+          status:
+            description: status defines the observed state of ServiceLevelObjective
+            properties:
+              conditions:
+                description: |-
+                  conditions represent the current state of the ServiceLevelObjective resource.
+                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
+
+                  Standard condition types include:
+                  - "Available": the resource is fully functional
+                  - "Progressing": the resource is being created or updated
+                  - "Degraded": the resource failed to reach or maintain its desired state
+
+                  The status of each condition is one of True, False, or Unknown.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastUpdateTime:
+                description: lastUpdateTime indicates the last time the status was
+                  updated.
+                format: date-time
+                type: string
+              objectives:
+                description: objectives represent the current status of each objective
+                  defined in the spec.
+                items:
+                  properties:
+                    actual:
+                      description: Actual current percentage (e.g., 99.87)
+                      type: number
+                    errorBudget:
+                      description: ErrorBudget details
+                      properties:
+                        consumed:
+                          description: Consumed error budget so far (e.g., "10.5m")
+                          type: string
+                        percentRemaining:
+                          description: PercentRemaining is the percentage of budget
+                            left (e.g., 75.69)
+                          type: number
+                        remaining:
+                          description: Remaining error budget (e.g., "32.7m")
+                          type: string
+                        total:
+                          description: Total error budget for the window (e.g., "43.2m"
+                            for 43.2 minutes)
+                          type: string
+                      required:
+                      - consumed
+                      - percentRemaining
+                      - remaining
+                      - total
+                      type: object
+                    lastQueried:
+                      description: LastQueried is when we last queried Prometheus
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name of the objective (matches Objective.Name)
+                      type: string
+                    status:
+                      description: Status indicates if objective is being met
+                      enum:
+                      - met
+                      - at-risk
+                      - violated
+                      - unknown
+                      type: string
+                    target:
+                      description: Target percentage (copied from spec for convenience)
+                      type: number
+                  required:
+                  - actual
+                  - errorBudget
+                  - name
+                  - status
+                  - target
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
