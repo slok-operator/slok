@@ -2,11 +2,15 @@ name: Lint
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
 
 jobs:
   lint:
-    name: Run on Ubuntu
+    name: Lint Codebase
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
