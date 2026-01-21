@@ -36,7 +36,7 @@ import (
 type ServiceLevelObjectiveReconciler struct {
 	client.Client
 	Scheme           *runtime.Scheme
-	PrometheusClient *prometheus.Client
+	PrometheusClient prometheus.PrometheusClient
 	PrometheusURL    string
 }
 

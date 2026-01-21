@@ -10,9 +10,18 @@ import (
 	"github.com/prometheus/common/model"
 )
 
+// PrometheusClient defines the interface for Prometheus operations
+type PrometheusClient interface {
+	QuerySLI(ctx context.Context, query string) (float64, error)
+	CheckConnection(ctx context.Context) error
+}
+
 type Client struct {
 	api promv1.API
 }
+
+// Ensure Client implements PrometheusClient
+var _ PrometheusClient = (*Client)(nil)
 
 func NewClient(prometheusURL string) (*Client, error) {
 	client, err := promapi.NewClient(promapi.Config{
