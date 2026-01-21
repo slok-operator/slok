@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
+	"github.com/federicolepera/slok/internal/validation"
 )
 
 // nolint:unused
@@ -53,7 +54,7 @@ func SetupServiceLevelObjectiveWebhookWithManager(mgr ctrl.Manager) error {
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
 // as this struct is used only for temporary operations and does not need to be deeply copied.
 type ServiceLevelObjectiveCustomValidator struct {
-	// TODO(user): Add more fields as needed for validation
+	
 }
 
 var _ webhook.CustomValidator = &ServiceLevelObjectiveCustomValidator{}
@@ -64,11 +65,19 @@ func (v *ServiceLevelObjectiveCustomValidator) ValidateCreate(_ context.Context,
 	if !ok {
 		return nil, fmt.Errorf("expected a ServiceLevelObjective object but got %T", obj)
 	}
+	var admissionWarnings admission.Warnings
 	servicelevelobjectivelog.Info("Validation for ServiceLevelObjective upon creation", "name", servicelevelobjective.GetName())
-
-	// TODO(user): fill in your validation logic upon object creation.
-
-	return nil, nil
+	for _, objective := range servicelevelobjective.Spec.Objectives {
+		mismatches := validation.ValidateQueryWindow(objective.Sli.Query, objective.Window)
+		if len(mismatches) > 0 {
+			servicelevelobjectivelog.Info("WARNING: SLI query window mismatch", "mismatches", mismatches)
+			for _, mismatch := range mismatches {
+				warningMsg := fmt.Sprintf("SLI query window [%s] does not match objective window [%s] in objective [%s]", mismatch.QueryWindow, mismatch.ObjectiveWindow, objective.Name)
+				admissionWarnings = append(admissionWarnings, warningMsg)
+			}
+		}
+	}
+	return admissionWarnings, nil
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type ServiceLevelObjective.
@@ -77,10 +86,18 @@ func (v *ServiceLevelObjectiveCustomValidator) ValidateUpdate(_ context.Context,
 	if !ok {
 		return nil, fmt.Errorf("expected a ServiceLevelObjective object for the newObj but got %T", newObj)
 	}
+	var admissionWarnings admission.Warnings
 	servicelevelobjectivelog.Info("Validation for ServiceLevelObjective upon update", "name", servicelevelobjective.GetName())
-
-	// TODO(user): fill in your validation logic upon object update.
-
+		for _, objective := range servicelevelobjective.Spec.Objectives {
+		mismatches := validation.ValidateQueryWindow(objective.Sli.Query, objective.Window)
+		if len(mismatches) > 0 {
+			servicelevelobjectivelog.Info("WARNING: SLI query window mismatch", "mismatches", mismatches)
+			for _, mismatch := range mismatches {
+				warningMsg := fmt.Sprintf("SLI query window [%s] does not match objective window [%s] in objective [%s]", mismatch.QueryWindow, mismatch.ObjectiveWindow, objective.Name)
+				admissionWarnings = append(admissionWarnings, warningMsg)
+			}
+		}
+	}
 	return nil, nil
 }
 
@@ -91,8 +108,6 @@ func (v *ServiceLevelObjectiveCustomValidator) ValidateDelete(ctx context.Contex
 		return nil, fmt.Errorf("expected a ServiceLevelObjective object but got %T", obj)
 	}
 	servicelevelobjectivelog.Info("Validation for ServiceLevelObjective upon deletion", "name", servicelevelobjective.GetName())
-
-	// TODO(user): fill in your validation logic upon object deletion.
 
 	return nil, nil
 }
