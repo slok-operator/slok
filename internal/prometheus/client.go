@@ -27,7 +27,7 @@ func NewClient(prometheusURL string) (*Client, error) {
 	}, nil
 }
 
-func (c * Client) QuerySLI(ctx context.Context, query string) (float64, error) {
+func (c *Client) QuerySLI(ctx context.Context, query string) (float64, error) {
 	result, warnings, err := c.api.Query(ctx, query, time.Now())
 	if err != nil {
 		return 0, err
@@ -43,7 +43,7 @@ func (c * Client) QuerySLI(ctx context.Context, query string) (float64, error) {
 		return 0, fmt.Errorf("no data returned for query: %s", query)
 	}
 	value := float64(vectorResult[0].Value)
-	//Normalize value to 0-100 scale
+	// Normalize value to 0-100 scale
 	if value >= 0 && value <= 1 {
 		value = value * 100
 	}

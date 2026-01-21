@@ -32,16 +32,17 @@ type Objective struct {
 	// +required
 	Name string `json:"name"`
 	// targetPercentage is the target percentage for the objective (e.g., 99.9).
-    // Target as percentage (e.g. 99.9, 95.5)
-    // +kubebuilder:validation:Minimum=0
-    // +kubebuilder:validation:Maximum=200
-    Target float64 `json:"target"`
+	// Target as percentage (e.g. 99.9, 95.5)
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=200
+	Target float64 `json:"target"`
 	// window is the time window over which the objective is measured (e.g., "30d" for 30 days).
 	// +kubebuilder:validation:Pattern=`^(\d+d|\d+h|\d+m|\d+s)$`
 	// +required
-	Window string  `json:"window"`
-	Sli  SLI     `json:"sli"`
+	Window string `json:"window"`
+	Sli    SLI    `json:"sli"`
 }
+
 // ServiceLevelObjectiveSpec defines the desired state of ServiceLevelObjective
 type ServiceLevelObjectiveSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -60,6 +61,7 @@ type ServiceLevelObjectiveSpec struct {
 	// +required
 	Objectives []Objective `json:"objectives"`
 }
+
 // ErrorBudgetStatus represents error budget consumption
 type ErrorBudgetStatus struct {
 	// Total error budget for the window (e.g., "43.2m" for 43.2 minutes)
@@ -96,13 +98,14 @@ type ObjectiveStatus struct {
 	// +optional
 	LastQueried metav1.Time `json:"lastQueried,omitempty"`
 }
+
 // ServiceLevelObjectiveStatus defines the observed state of ServiceLevelObjective.
 type ServiceLevelObjectiveStatus struct {
 	// objectives represent the current status of each objective defined in the spec.
 	// +optional
 	Objectives []ObjectiveStatus `json:"objectives,omitempty"`
 
-    // lastUpdateTime indicates the last time the status was updated.
+	// lastUpdateTime indicates the last time the status was updated.
 	// +optional
 	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
 	// conditions represent the current state of the ServiceLevelObjective resource.

@@ -35,7 +35,7 @@ import (
 // ServiceLevelObjectiveReconciler reconciles a ServiceLevelObjective object
 type ServiceLevelObjectiveReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme           *runtime.Scheme
 	PrometheusClient *prometheus.Client
 	PrometheusURL    string
 }
@@ -62,13 +62,13 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	//Initialize Prometheus client if not already done
+	// Initialize Prometheus client if not already done
 	if r.PrometheusClient == nil {
 		if r.PrometheusURL == "" {
-			promURL := "http://localhost:9090" //Default Prometheus URL
+			promURL := "http://localhost:9090" // Default Prometheus URL
 			r.PrometheusURL = promURL
 		}
-		if promClient, err := prometheus.NewClient(r.PrometheusURL);  err != nil {
+		if promClient, err := prometheus.NewClient(r.PrometheusURL); err != nil {
 			logger.Error(err, "unable to create Prometheus client", "prometheus_url", r.PrometheusURL)
 			return ctrl.Result{}, err
 		} else {
@@ -77,7 +77,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		}
 	}
 
-	//Check Prometheus connection
+	// Check Prometheus connection
 	if err := r.PrometheusClient.CheckConnection(ctx); err != nil {
 		logger.Error(err, "unable to connect to Prometheus", "prometheus_url", r.PrometheusURL)
 		return ctrl.Result{}, err
@@ -97,16 +97,16 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 				Target: obj.Target,
 				Status: "unknown",
 				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-					Total: "unknown",
-					Consumed: "unknown",
-					Remaining: "unknown",
+					Total:            "unknown",
+					Consumed:         "unknown",
+					Remaining:        "unknown",
 					PercentRemaining: 0,
 				},
 				LastQueried: metav1.Now(),
 			})
 			continue
 		}
-		//Determine status
+		// Determine status
 		logger.Info("SLI value", "objective_name", obj.Name, "sli_value", sliValue)
 
 		budget, err := errorbudget.Calculate(obj.Target, sliValue, obj.Window)
@@ -118,9 +118,9 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 				Actual: sliValue,
 				Status: "unknown",
 				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-					Total: "unknown",
-					Consumed: "unknown",
-					Remaining: "unknown",
+					Total:            "unknown",
+					Consumed:         "unknown",
+					Remaining:        "unknown",
 					PercentRemaining: 0,
 				},
 				LastQueried: metav1.Now(),
@@ -134,9 +134,9 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			Actual: sliValue,
 			Status: status,
 			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-				Total: budget.Total,
-				Consumed: budget.Consumed,
-				Remaining: budget.Remaining,
+				Total:            budget.Total,
+				Consumed:         budget.Consumed,
+				Remaining:        budget.Remaining,
 				PercentRemaining: budget.PercentRemaining,
 			},
 			LastQueried: metav1.Now(),
@@ -150,7 +150,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		Status: metav1.ConditionTrue,
 		Reason: "Reconciled",
 	})
-		if err := r.Status().Update(ctx, &slo); err != nil {
+	if err := r.Status().Update(ctx, &slo); err != nil {
 		logger.Error(err, "Failed to update SLO status")
 		return ctrl.Result{}, err
 	}

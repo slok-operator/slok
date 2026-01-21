@@ -6,20 +6,20 @@ import (
 )
 
 type Budget struct {
-    // Total error budget for the window (e.g., "43.2m" for 43.2 minutes)
-    Total string
+	// Total error budget for the window (e.g., "43.2m" for 43.2 minutes)
+	Total string
 
-    // Consumed error budget so far (e.g., "10.5m")
-    Consumed string
+	// Consumed error budget so far (e.g., "10.5m")
+	Consumed string
 
-    // Remaining error budget (e.g., "32.7m")
-    Remaining string
+	// Remaining error budget (e.g., "32.7m")
+	Remaining string
 
-    // PercentRemaining is the percentage of budget left (e.g., 75.69)
-    PercentRemaining float64
+	// PercentRemaining is the percentage of budget left (e.g., 75.69)
+	PercentRemaining float64
 }
 
-func Calculate(target float64, actual float64, window string) (*Budget, error){
+func Calculate(target float64, actual float64, window string) (*Budget, error) {
 	duration, err := parseWindow(window)
 	if err != nil {
 		return &Budget{}, err
@@ -45,9 +45,9 @@ func Calculate(target float64, actual float64, window string) (*Budget, error){
 	}
 
 	return &Budget{
-		Total: fmt.Sprintf("%.1fm", errorBudgetSeconds/60.0),
-		Consumed: fmt.Sprintf("%.1fm", consumedErrorSeconds/60.0),
-		Remaining: fmt.Sprintf("%.1fm", remainingErrorSeconds/60.0),
+		Total:            fmt.Sprintf("%.1fm", errorBudgetSeconds/60.0),
+		Consumed:         fmt.Sprintf("%.1fm", consumedErrorSeconds/60.0),
+		Remaining:        fmt.Sprintf("%.1fm", remainingErrorSeconds/60.0),
 		PercentRemaining: percentRemaining,
 	}, nil
 }
@@ -85,7 +85,7 @@ func DetermineStatus(target float64, actual float64, budgetPercente float64) str
 	if actual < target {
 		return "violated"
 	}
-	
+
 	if budgetPercente < 10.0 && budgetPercente >= 0.0 {
 		return "at-risk"
 	}
