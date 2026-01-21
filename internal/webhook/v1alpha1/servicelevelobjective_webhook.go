@@ -54,7 +54,6 @@ func SetupServiceLevelObjectiveWebhookWithManager(mgr ctrl.Manager) error {
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
 // as this struct is used only for temporary operations and does not need to be deeply copied.
 type ServiceLevelObjectiveCustomValidator struct {
-	
 }
 
 var _ webhook.CustomValidator = &ServiceLevelObjectiveCustomValidator{}
@@ -88,7 +87,7 @@ func (v *ServiceLevelObjectiveCustomValidator) ValidateUpdate(_ context.Context,
 	}
 	var admissionWarnings admission.Warnings
 	servicelevelobjectivelog.Info("Validation for ServiceLevelObjective upon update", "name", servicelevelobjective.GetName())
-		for _, objective := range servicelevelobjective.Spec.Objectives {
+	for _, objective := range servicelevelobjective.Spec.Objectives {
 		mismatches := validation.ValidateQueryWindow(objective.Sli.Query, objective.Window)
 		if len(mismatches) > 0 {
 			servicelevelobjectivelog.Info("WARNING: SLI query window mismatch", "mismatches", mismatches)
@@ -98,7 +97,7 @@ func (v *ServiceLevelObjectiveCustomValidator) ValidateUpdate(_ context.Context,
 			}
 		}
 	}
-	return nil, nil
+	return admissionWarnings, nil
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type ServiceLevelObjective.
