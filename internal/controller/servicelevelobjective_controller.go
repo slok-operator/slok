@@ -200,6 +200,7 @@ func ValidateQueryWindow(sliQuery string, objectiveWindow string) []QueryWindowM
 
 	return mismatches
 }
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServiceLevelObjectiveReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
