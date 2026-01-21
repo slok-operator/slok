@@ -2,6 +2,7 @@ package errorbudget
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -48,7 +49,7 @@ func Calculate(target float64, actual float64, window string) (*Budget, error) {
 		Total:            fmt.Sprintf("%.1fm", errorBudgetSeconds/60.0),
 		Consumed:         fmt.Sprintf("%.1fm", consumedErrorSeconds/60.0),
 		Remaining:        fmt.Sprintf("%.1fm", remainingErrorSeconds/60.0),
-		PercentRemaining: percentRemaining,
+		PercentRemaining: math.Round(percentRemaining*100) / 100,
 	}, nil
 }
 

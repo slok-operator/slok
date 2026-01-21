@@ -48,7 +48,7 @@ func TestCalculate(t *testing.T) {
 				Total:            "50.4m",
 				Consumed:         "45.9m",
 				Remaining:        "4.5m",
-				PercentRemaining: 9.000000000000343,
+				PercentRemaining: 9,
 			},
 			expectError: false,
 		},
