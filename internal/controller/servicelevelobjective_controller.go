@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -31,6 +32,9 @@ import (
 	"github.com/federicolepera/slok/internal/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// windowRegex matches Prometheus range vectors like [5m], [7d], [1h], [30s]
+var windowRegex = regexp.MustCompile(`\[(\d+[smhdwy])\]`)
 
 // ServiceLevelObjectiveReconciler reconciles a ServiceLevelObjective object
 type ServiceLevelObjectiveReconciler struct {
@@ -89,6 +93,11 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 
 	for _, obj := range slo.Spec.Objectives {
 		logger.Info("Objective", "name", obj.Name, "target", obj.Target, "window", obj.Window, "sli_query", obj.Sli.Query)
+		// Validate SLI query window vs objective window
+		mismatches := ValidateQueryWindow(obj.Sli.Query, obj.Window)
+		if len(mismatches) > 0 {
+			logger.Info("WARNING: SLI query window mismatch", "mismatches", mismatches)
+		}
 		sliValue, err := r.PrometheusClient.QuerySLI(ctx, obj.Sli.Query)
 		if err != nil {
 			logger.Error(err, "unable to query SLI", "sli_query", obj.Sli.Query)
@@ -161,6 +170,36 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 	return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 }
 
+// QueryWindowMismatch represents a mismatch between query window and objective window
+type QueryWindowMismatch struct {
+	QueryWindow     string
+	ObjectiveWindow string
+}
+
+// ValidateQueryWindow checks if the range windows in the PromQL query match the objective window.
+// Returns a list of mismatched windows found in the query.
+// This is a warning-level validation - mismatches don't prevent reconciliation.
+func ValidateQueryWindow(sliQuery string, objectiveWindow string) []QueryWindowMismatch {
+	matches := windowRegex.FindAllStringSubmatch(sliQuery, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	var mismatches []QueryWindowMismatch
+	for _, match := range matches {
+		if len(match) >= 2 {
+			queryWindow := match[1]
+			if queryWindow != objectiveWindow {
+				mismatches = append(mismatches, QueryWindowMismatch{
+					QueryWindow:     queryWindow,
+					ObjectiveWindow: objectiveWindow,
+				})
+			}
+		}
+	}
+
+	return mismatches
+}
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServiceLevelObjectiveReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
