@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"time"
 
+	sloklog "github.com/federicolepera/slok/internal/log"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -58,7 +59,7 @@ type ServiceLevelObjectiveReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.1/pkg/reconcile
 func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := logf.FromContext(ctx)
+	logger := sloklog.New(logf.FromContext(ctx)).WithValues("slo", req.NamespacedName)
 
 	var slo observabilityv1alpha1.ServiceLevelObjective
 	if err := r.Get(ctx, req.NamespacedName, &slo); err != nil {
@@ -96,7 +97,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		// Validate SLI query window vs objective window
 		mismatches := ValidateQueryWindow(obj.Sli.Query, obj.Window)
 		if len(mismatches) > 0 {
-			logger.Info("WARNING: SLI query window mismatch", "mismatches", mismatches)
+			logger.Warn("WARNING: SLI query window mismatch", "mismatches", mismatches)
 		}
 		sliValue, err := r.PrometheusClient.QuerySLI(ctx, obj.Sli.Query)
 		if err != nil {
