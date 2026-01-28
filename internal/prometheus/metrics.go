@@ -23,10 +23,10 @@ import (
 
 // Metric labels used across all metrics
 const (
-	LabelNamespace   = "namespace"
+	LabelNamespace             = "namespace"
 	LabelServiceLevelObjective = "service_level_objective"
-	LabelObjectiveName = "objective_name"
-	LabelStatus      = "status"
+	LabelObjectiveName         = "objective_name"
+	LabelStatus                = "status"
 )
 
 var (
