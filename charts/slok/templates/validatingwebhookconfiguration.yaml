@@ -1,0 +1,33 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "slok.fullname" . }}-validating-webhook-configuration
+  labels:
+    {{- include "slok.labels" . | nindent 4 }}
+  {{- if .Values.certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "slok.fullname" . }}-serving-cert
+  {{- end }}
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ include "slok.webhookServiceName" . }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-observability-slok-io-v1alpha1-servicelevelobjective
+  failurePolicy: {{ .Values.webhook.failurePolicy }}
+  name: vservicelevelobjective-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - observability.slok.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - servicelevelobjectives
+  sideEffects: None
+{{- end }}

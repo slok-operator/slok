@@ -1,0 +1,26 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "slok.fullname" . }}-metrics-monitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slok.labels" . | nindent 4 }}
+spec:
+  endpoints:
+  - path: /metrics
+    port: https
+    {{- if .Values.metrics.secure }}
+    scheme: https
+    bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tlsConfig:
+      insecureSkipVerify: true
+    {{- else }}
+    scheme: http
+    {{- end }}
+    interval: {{ .Values.metrics.serviceMonitor.interval }}
+    scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+  selector:
+    matchLabels:
+      {{- include "slok.selectorLabels" . | nindent 6 }}
+{{- end }}

@@ -1,0 +1,18 @@
+apiVersion: v2
+name: slok
+description: A Helm chart for the SLOK (Service Level Objective Kubernetes) operator
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.20.0-0"
+keywords:
+  - slo
+  - observability
+  - prometheus
+  - kubernetes
+  - operator
+home: https://github.com/federicolepera/slok
+sources:
+  - https://github.com/federicolepera/slok
+maintainers:
+  - name: Federico Le Pera

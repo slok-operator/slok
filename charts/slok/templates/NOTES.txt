@@ -1,0 +1,46 @@
+SLOK Operator has been installed successfully!
+
+{{- if .Values.webhook.enabled }}
+
+Webhook is enabled. Make sure cert-manager is installed in your cluster.
+{{- end }}
+
+{{- if .Values.metrics.enabled }}
+
+Metrics endpoint is available at:
+  Service: {{ include "slok.metricsServiceName" . }}:{{ .Values.metrics.port }}
+{{- if .Values.metrics.serviceMonitor.enabled }}
+
+ServiceMonitor is enabled - Prometheus will automatically scrape metrics.
+{{- end }}
+{{- end }}
+
+{{- if .Values.prometheusRule.enabled }}
+
+PrometheusRule is enabled with the following alerts:
+{{- if .Values.prometheusRule.rules.sloAtRisk.enabled }}
+  - SLOObjectiveAtRisk (severity: {{ .Values.prometheusRule.rules.sloAtRisk.severity }})
+{{- end }}
+{{- if .Values.prometheusRule.rules.sloViolated.enabled }}
+  - SLOObjectiveViolated (severity: {{ .Values.prometheusRule.rules.sloViolated.severity }})
+{{- end }}
+{{- end }}
+
+To create a ServiceLevelObjective, apply a resource like:
+
+  apiVersion: observability.slok.io/v1alpha1
+  kind: ServiceLevelObjective
+  metadata:
+    name: my-slo
+  spec:
+    displayName: "My Application SLO"
+    objectives:
+      - name: availability
+        target: 99.9
+        window: 7d
+        sli:
+          query: |
+            sum(rate(http_requests_total{status=~"2.."}[5m]))
+            / sum(rate(http_requests_total[5m])) * 100
+
+For more information, visit: https://github.com/federicolepera/slok

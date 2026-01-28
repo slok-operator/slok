@@ -1,0 +1,16 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "slok.webhookServiceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slok.labels" . | nindent 4 }}
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: {{ .Values.webhook.port }}
+  selector:
+    {{- include "slok.selectorLabels" . | nindent 4 }}
+{{- end }}

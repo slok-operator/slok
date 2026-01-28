@@ -1,0 +1,49 @@
+{{- if .Values.certManager.enabled }}
+{{- if .Values.certManager.issuer.create }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "slok.issuerName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slok.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+{{- end }}
+---
+{{- if .Values.webhook.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "slok.fullname" . }}-serving-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slok.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+  - {{ include "slok.webhookServiceName" . }}.{{ .Release.Namespace }}.svc
+  - {{ include "slok.webhookServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ include "slok.issuerName" . }}
+  secretName: {{ include "slok.webhookCertSecretName" . }}
+{{- end }}
+---
+{{- if and .Values.metrics.enabled .Values.metrics.secure }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "slok.fullname" . }}-metrics-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slok.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+  - {{ include "slok.metricsServiceName" . }}.{{ .Release.Namespace }}.svc
+  - {{ include "slok.metricsServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ include "slok.issuerName" . }}
+  secretName: {{ include "slok.metricsCertSecretName" . }}
+{{- end }}
+{{- end }}

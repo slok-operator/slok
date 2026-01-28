@@ -1,0 +1,81 @@
+replicaCount: 1
+
+image:
+  repository: quay.io/flepera_kiratech/slok
+  pullPolicy: Always
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+leaderElection:
+  enabled: true
+
+webhook:
+  enabled: true
+  port: 9443
+  failurePolicy: Fail
+
+metrics:
+  enabled: true
+  port: 8443
+  secure: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+certManager:
+  enabled: true
+  issuer:
+    create: true
+    name: ""
+
+prometheusRule:
+  enabled: true
+  rules:
+    sloAtRisk:
+      enabled: true
+      for: 5m
+      severity: warning
+    sloViolated:
+      enabled: true
+      for: 1m
+      severity: critical
+
+prometheus:
+  url: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"
+
+healthProbe:
+  port: 8081
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+securityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
