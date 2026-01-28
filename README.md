@@ -1,57 +1,106 @@
-# SLOK
+# SLOK - Service Level Objectives for Kubernetes
 
-SLOK (Service Level Objective for Kubernetes) is a Kubernetes operator for managing Service Level Objectives (SLOs) with automatic error budget tracking.
+SLOK is a Kubernetes operator that manages Service Level Objectives (SLOs) with automatic error budget tracking. Define your reliability targets as Kubernetes resources, and SLOK will continuously monitor them using Prometheus.
 
-## Overview
+## Quick Start
 
-SLOK provides a declarative way to define, monitor, and track SLOs in your Kubernetes cluster. It integrates with Prometheus to query metrics and automatically calculates error budgets, helping teams maintain reliability targets.
+Get your first SLO running in 5 minutes:
 
-## Features
+```bash
+# 1. Install the CRDs and operator
+kubectl apply -k config/default
 
-- Custom Resource Definition (CRD) for ServiceLevelObjective
-- Prometheus integration for querying SLI metrics
-- Automatic error budget calculation
-- Status updates with objective tracking
-- Query validation (window match checking)
+# 2. Create your first SLO
+cat <<EOF | kubectl apply -f -
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: my-api-availability
+spec:
+  displayName: "My API Availability"
+  objectives:
+    - name: availability
+      target: 99.9
+      window: 7d
+      sli:
+        query: |
+          (sum(rate(http_requests_total{status=~"2.."}[5m]))
+           / sum(rate(http_requests_total[5m]))) * 100
+EOF
+
+# 3. Check the status
+kubectl get slo my-api-availability -o yaml
+```
+
+## Prerequisites
+
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| Kubernetes | 1.20+ | |
+| Prometheus | 2.x+ | Must be accessible from the operator |
+| Prometheus Operator | (optional) | Required for ServiceMonitor and PrometheusRule |
+| cert-manager | 1.0+ | Required if using webhooks |
+
+### Prometheus Setup
+
+SLOK needs to query Prometheus for your SLI metrics. The operator connects to Prometheus via the `PROMETHEUS_URL` environment variable.
+
+If you're using [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack), Prometheus is typically available at:
+```
+http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090
+```
 
 ## Installation
 
-### Prerequisites
-
-- Kubernetes cluster v1.28+
-- Prometheus deployed in your cluster
-- kubectl configured to access your cluster
-- Go 1.24+ (for building from source)
-
-### Install CRDs
+### Option 1: Kustomize (Quick)
 
 ```bash
-make install
+# Install CRDs and deploy operator
+kubectl apply -k config/default
 ```
 
-### Deploy Controller
+### Option 2: Helm (Recommended for Production)
 
 ```bash
-make deploy IMG=<your-registry>/slok:latest
+# Add the chart repository (if published) or install from local
+helm install slok charts/slok \
+  --namespace slok-system \
+  --create-namespace \
+  --set prometheus.url=http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090
 ```
 
-### Build and Push Image
+#### Helm Configuration
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `prometheus.url` | Prometheus server URL | `http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090` |
+| `webhook.enabled` | Enable admission webhooks | `true` |
+| `metrics.enabled` | Enable metrics endpoint | `true` |
+| `prometheusRule.enabled` | Deploy PrometheusRule for SLO alerts | `true` |
+| `replicaCount` | Number of operator replicas | `1` |
+
+Disable webhooks (useful for development):
+```bash
+helm install slok charts/slok \
+  --set webhook.enabled=false \
+  --set certManager.enabled=false
+```
+
+### Verify Installation
 
 ```bash
-make docker-build IMG=<your-registry>/slok:latest
-make docker-push IMG=<your-registry>/slok:latest
+# Check operator is running
+kubectl get pods -n slok-system
+
+# Check CRD is installed
+kubectl get crd servicelevelobjectives.observability.slok.io
 ```
 
-### Uninstall
+## Examples
 
-```bash
-make undeploy
-make uninstall
-```
+### Availability SLO
 
-## Usage
-
-### Define a ServiceLevelObjective
+Track the percentage of successful HTTP requests:
 
 ```yaml
 apiVersion: observability.slok.io/v1alpha1
@@ -62,12 +111,68 @@ spec:
   displayName: "Payment API Availability"
   objectives:
     - name: availability
-      target: 99.9
+      target: 99.9        # Target: 99.9% successful requests
+      window: 30d         # Over a 30-day rolling window
+      sli:
+        query: |
+          (
+            sum(rate(http_requests_total{service="payment-api", status=~"2.."}[5m]))
+            /
+            sum(rate(http_requests_total{service="payment-api"}[5m]))
+          ) * 100
+```
+
+### Latency SLO
+
+Track the percentage of requests under a latency threshold:
+
+```yaml
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: checkout-latency
+spec:
+  displayName: "Checkout Latency"
+  objectives:
+    - name: p99-latency
+      target: 95.0        # 95% of requests should be under threshold
+      window: 7d
+      sli:
+        query: |
+          (
+            sum(rate(http_request_duration_seconds_bucket{service="checkout", le="0.5"}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count{service="checkout"}[5m]))
+          ) * 100
+```
+
+### Multiple Objectives
+
+Define multiple objectives in a single SLO:
+
+```yaml
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: api-gateway-slo
+spec:
+  displayName: "API Gateway SLO"
+  objectives:
+    - name: availability
+      target: 99.95
       window: 30d
       sli:
         query: |
-          sum(rate(http_requests_total{service="payment-api", code!~"5.."}[30d])) /
-          sum(rate(http_requests_total{service="payment-api"}[30d])) * 100
+          (sum(rate(http_requests_total{job="api-gateway", status!~"5.."}[5m]))
+           / sum(rate(http_requests_total{job="api-gateway"}[5m]))) * 100
+
+    - name: latency-p99
+      target: 99.0
+      window: 30d
+      sli:
+        query: |
+          (sum(rate(http_request_duration_seconds_bucket{job="api-gateway", le="0.3"}[5m]))
+           / sum(rate(http_request_duration_seconds_count{job="api-gateway"}[5m]))) * 100
 ```
 
 ### Check SLO Status
@@ -76,332 +181,119 @@ spec:
 kubectl get slo payment-api-availability -o yaml
 ```
 
-The status section shows:
-
+Output:
 ```yaml
 status:
   objectives:
     - name: availability
       target: 99.9
       actual: 99.87
-      status: met
+      status: met           # met | at-risk | violated
       errorBudget:
         total: "43.2m"
         consumed: "10.5m"
         remaining: "32.7m"
         percentRemaining: 75.69
-      lastQueried: "2026-01-20T10:30:00Z"
-  lastUpdateTime: "2026-01-20T10:30:00Z"
+      lastQueried: "2026-01-28T10:30:00Z"
+  lastUpdateTime: "2026-01-28T10:30:00Z"
+  conditions:
+    - type: Available
+      status: "True"
+      reason: Reconciled
 ```
 
-## Configuration
+### Alerting with PrometheusRule
 
-### Environment Variables
+SLOK exposes metrics that you can use for alerting:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PROMETHEUS_URL` | Prometheus server URL | `http://prometheus:9090` |
-| `RECONCILE_INTERVAL` | How often to reconcile SLOs | `1m` |
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: slo-alerts
+  labels:
+    release: prometheus
+spec:
+  groups:
+  - name: slo.alerts
+    rules:
+    - alert: SLOObjectiveAtRisk
+      expr: optimization_request_objective_status{status="at-risk"} == 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "SLO {{ $labels.service_level_objective }} is at risk"
 
-## Architecture
-
+    - alert: SLOObjectiveViolated
+      expr: optimization_request_objective_status{status="violated"} == 1
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "SLO {{ $labels.service_level_objective }} is violated"
 ```
-+------------------+       +-------------+       +------------+
-| ServiceLevel     |       |   SLOK      |       | Prometheus |
-| Objective CRD    | ----> | Controller  | ----> |   Server   |
-+------------------+       +-------------+       +------------+
-                                 |
-                                 v
-                          +-------------+
-                          | Error Budget|
-                          | Calculator  |
-                          +-------------+
+
+## Limitations
+
+### Current Version (v0.1.0)
+
+| Limitation | Description | Workaround |
+|------------|-------------|------------|
+| **Percentage-based SLI only** | SLI query must return a value between 0-100 | Structure your query to return a percentage |
+| **Manual PromQL required** | No query templates or builders | Write PromQL directly in the spec |
+| **Instant queries only** | Uses Prometheus instant query, not range query | Ensure your query uses `rate()` or similar functions |
+| **No multi-cluster support** | One operator per cluster | Deploy SLOK in each cluster |
+| **No built-in alerting** | Operator doesn't send alerts directly | Use PrometheusRule for alerting (see example above) |
+| **Fixed reconciliation interval** | SLOs are re-evaluated every 1 minute | Cannot be configured per-SLO |
+
+### Query Requirements
+
+Your SLI query **must**:
+- Return a single scalar value (not a vector)
+- Return a percentage (0-100 scale)
+- Use appropriate time functions (`rate()`, `increase()`) for counters
+
+**Good query:**
+```promql
+(sum(rate(http_requests_total{status=~"2.."}[5m]))
+ / sum(rate(http_requests_total[5m]))) * 100
 ```
+
+**Bad query** (returns vector, not scalar):
+```promql
+rate(http_requests_total{status=~"2.."}[5m])
+```
+
+### Error Budget Calculation
+
+Error budget is calculated as:
+```
+allowed_errors = (100 - target) * window_in_minutes
+consumed = allowed_errors * ((target - actual) / (100 - target))
+remaining = allowed_errors - consumed
+```
+
+Example for a 99.9% target over 30 days:
+- Allowed downtime: 0.1% of 30 days = 43.2 minutes
+- If actual is 99.87%, you've consumed ~30% of your budget
 
 ## Development
 
-### Build
-
 ```bash
-make build
-```
+# Run locally (against current kubeconfig)
+make run
 
-### Run Tests
-
-```bash
+# Run tests
 make test
+
+# Build Docker image
+make docker-build IMG=your-registry/slok:latest
+
+# Deploy to cluster
+make deploy IMG=your-registry/slok:latest
 ```
-
-### Run Locally
-
-```bash
-make install    # Install CRDs
-make run        # Run controller locally
-```
-
-### Lint
-
-```bash
-make lint
-```
-
-### Run E2E Tests
-
-```bash
-make test-e2e
-```
-
-## Roadmap
-
-### v0.1.0 - MVP (Current)
-
-**Objective:** Basic working operator with percentage-based metrics
-
-**Features:**
-- CRD ServiceLevelObjective with base spec
-- Controller that reconciles SLOs
-- Prometheus client integration
-- Error budget calculation (percentage-based)
-- Status update with objectives
-- Query validation (window match check)
-- Basic alerting (log when budget < threshold)
-- Unit tests for error budget calculator
-- Unit tests for prometheus client
-- Sample CR
-
-**Limitations:**
-- Only percentage-based SLI (0-100)
-- Manual query (user writes PromQL)
-- Window must match between spec and query
-- Alert only in logs (no webhook)
-- Instant query (no range query)
-
----
-
-### v0.2.0 - Multi-type SLI
-
-**Objective:** Threshold-based SLI support (absolute latency, etc.)
-
-**Features:**
-- Add `type` field to SLI (percentage | threshold)
-- Add `operator` field to SLI (<, >, <=, >=)
-- Controller logic for threshold-based SLI
-- Error budget calculation for threshold SLI
-- Range query support (calculation over entire window)
-- Prometheus retention check
-- Integration tests with Prometheus mock
-
-**CRD Changes:**
-```yaml
-sli:
-  type: threshold
-  operator: "<"
-  query: "histogram_quantile(0.95, ...)"
-```
-
----
-
-### v0.3.0 - Alerting and Observability
-
-**Objective:** Real alerts and operator metrics
-
-**Features:**
-- Webhook alerting (Slack integration)
-- PagerDuty integration
-- Generic webhook support
-- Burn rate alerting (fast/slow burn detection)
-- Operator metrics (Prometheus metrics for the operator itself)
-  - `slok_slo_status{name, status}` (met/violated/at-risk)
-  - `slok_error_budget_remaining{name}`
-  - `slok_reconcile_duration_seconds`
-- ServiceMonitor for the operator
-- Alert template customization
-
-**CRD Changes:**
-```yaml
-alerting:
-  errorBudgetThreshold: 10
-  channels:
-    - type: slack
-      webhook: "https://hooks.slack.com/..."
-    - type: pagerduty
-      integrationKey: "xxx"
-  burnRate:
-    enabled: true
-    fastBurnThreshold: 14.4
-    slowBurnThreshold: 1
-```
-
----
-
-### v0.4.0 - Template Library
-
-**Objective:** Simplify SLO creation with predefined templates
-
-**Features:**
-- Template system for common queries
-- Built-in templates:
-  - http-availability
-  - http-latency-percentile
-  - http-latency-threshold
-  - grpc-availability
-  - grpc-latency
-  - job-success-rate
-  - queue-processing-latency
-- Custom template support (ConfigMap)
-- Template validation
-- Template documentation generator
-
-**CRD Changes:**
-```yaml
-sli:
-  template: http-availability
-  params:
-    service: payment-api
-    errorCodes: "5.."
-    namespace: production
-```
-
----
-
-### v0.5.0 - Recording Rules Support
-
-**Objective:** Integration with Prometheus recording rules
-
-**Features:**
-- Auto-detection of recording rules
-- Recording rule preference over raw query
-- PrometheusRule CRD generation (optional)
-- Recording rule templates
-- Validation that recording rule exists
-
-**CRD Changes:**
-```yaml
-sli:
-  recordingRule: "slo:availability:30d"
-  query: "..."  # fallback if recording rule doesn't exist
-```
-
----
-
-### v0.6.0 - Multi-Window and Reporting
-
-**Objective:** Multiple window support and automatic reports
-
-**Features:**
-- Multi-window support (7d, 30d, 90d simultaneously)
-- Calendar-based windows (monthly, quarterly)
-- Report generation (HTML/PDF)
-- Email report scheduling
-- Trend analysis (improving/degrading)
-- SLOReport CRD for storing reports
-- Comparison views (this month vs last)
-
-**New CRD: SLOReport**
-```yaml
-apiVersion: observability.slok.io/v1alpha1
-kind: SLOReport
-metadata:
-  name: payment-api-jan-2026
-spec:
-  sloRef: payment-api-slo
-  period: "2026-01-01/2026-01-31"
-  format: pdf
-status:
-  reportURL: "s3://reports/payment-api-jan-2026.pdf"
-```
-
----
-
-### v0.7.0 - Policy Enforcement
-
-**Objective:** Deploy gates and policy automation
-
-**Features:**
-- Policy enforcement engine
-- ArgoCD integration (block sync when budget exhausted)
-- Flux integration
-- Jenkins/GitLab CI integration
-- Manual override mechanism
-- Audit log for policy decisions
-- Exemption system (emergency deploys)
-
-**CRD Changes:**
-```yaml
-enforcement:
-  enabled: true
-  blockDeployOnBudgetExhausted: true
-  integrations:
-    - type: argocd
-      namespace: argocd
-    - type: flux
-      namespace: flux-system
-  exemptions:
-    - reason: "Security hotfix"
-      approvedBy: "john@example.com"
-      expiresAt: "2026-01-25T10:00:00Z"
-```
-
----
-
-### v0.8.0 - Dashboard Auto-Generation
-
-**Objective:** Automatic Grafana dashboards
-
-**Features:**
-- Grafana API integration
-- Auto-generate dashboard per SLO
-- Dashboard templates (overview, detailed, executive)
-- Multi-SLO overview dashboard
-- Custom panel configuration
-- Dashboard versioning
-
----
-
-### v0.9.0 - Advanced Features
-
-**Objective:** Enterprise features
-
-**Features:**
-- Multi-cluster support
-- Cost analysis (cost to improve SLO by 0.1%)
-- AI-powered recommendations
-- Incident correlation (link SLO violations to incidents)
-- Capacity planning hints
-- Dependency tracking (SLO dependencies)
-- Historical playback (what-if scenarios)
-
----
-
-### v1.0.0 - Production Ready
-
-**Objective:** Stable release
-
-**Features:**
-- API stabilization (v1)
-- Performance optimization
-- Security audit
-- Comprehensive documentation
-- Migration path from competitors (Sloth, Pyrra)
-- Helm chart in artifact hub
-- OpenShift OperatorHub submission
-
-## Contributing
-
-Contributions are welcome. Please open an issue first to discuss what you would like to change.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Kubebuilder](https://kubebuilder.io/) - SDK for building Kubernetes APIs
-- [Sloth](https://github.com/slok/sloth) - Inspiration for SLO management
-- [Pyrra](https://github.com/pyrra-dev/pyrra) - Another excellent SLO operator
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
