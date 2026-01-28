@@ -74,7 +74,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			return ctrl.Result{}, err
 		} else {
 			r.PrometheusClient = promClient
-			logger.Info("prometheus client initialized")
+			logger.Info("prometheus client initialized", "prometheus_url", r.PrometheusURL)
 		}
 	}
 

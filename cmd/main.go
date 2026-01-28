@@ -179,9 +179,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	prometheusURL := os.Getenv("PROMETHEUS_URL")
+	if prometheusURL == "" {
+		prometheusURL = "http://localhost:9090"
+	}
+	setupLog.Info("Using Prometheus URL", "url", prometheusURL)
+
 	if err := (&controller.ServiceLevelObjectiveReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		PrometheusURL: prometheusURL,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ServiceLevelObjective")
 		os.Exit(1)
