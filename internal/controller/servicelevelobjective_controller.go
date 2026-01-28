@@ -130,6 +130,18 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			continue
 		}
 		status := errorbudget.DetermineStatus(obj.Target, sliValue, budget.PercentRemaining)
+		prometheus.ObjectiveStatus.DeleteLabelValues(
+			slo.Namespace,
+			slo.Name,
+			obj.Name,
+			status,
+		)
+		prometheus.ObjectiveStatus.WithLabelValues(
+			slo.Namespace,
+			slo.Name,
+			obj.Name,
+			status,
+		).Set(1)
 		objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
 			Name:   obj.Name,
 			Target: obj.Target,
