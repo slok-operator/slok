@@ -40,6 +40,14 @@ var (
 		},
 		[]string{LabelNamespace, LabelServiceLevelObjective, LabelObjectiveName, LabelStatus},
 	)
+
+	ObjectivePercentRemaining = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "optimization_request_objective_percent_remaining",
+			Help: "Percentage of error budget remaining for the optimization request objective",
+		},
+		[]string{LabelNamespace, LabelServiceLevelObjective, LabelObjectiveName},
+	)
 )
 
 func init() {
@@ -47,5 +55,6 @@ func init() {
 	metrics.Registry.MustRegister(
 		// Slo metrics
 		ObjectiveStatus,
+		ObjectivePercentRemaining,
 	)
 }

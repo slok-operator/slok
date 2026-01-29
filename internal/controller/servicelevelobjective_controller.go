@@ -129,6 +129,11 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			})
 			continue
 		}
+		prometheus.ObjectivePercentRemaining.WithLabelValues(
+			slo.Namespace,
+			slo.Name,
+			obj.Name,
+		).Set(budget.PercentRemaining)
 		status := errorbudget.DetermineStatus(obj.Target, sliValue, budget.PercentRemaining)
 		prometheus.ObjectiveStatus.DeleteLabelValues(
 			slo.Namespace,

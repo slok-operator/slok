@@ -21,6 +21,7 @@ type Budget struct {
 	// PercentRemaining is the percentage of budget left (e.g., 75.69)
 	PercentRemaining float64
 }
+
 func calculatePercentage(target float64, actual float64, window string) (*Budget, error) {
 	duration, err := parseWindow(window)
 	if err != nil {
@@ -54,10 +55,10 @@ func calculatePercentage(target float64, actual float64, window string) (*Budget
 	}, nil
 }
 
-func calculateThreshold(target float64, actual float64, operator string, window string) (*Budget, error) {
+func calculateThreshold(target float64, actual float64, operator string) (*Budget, error) {
 	switch operator {
 	case "<", "<=":
-		 if actual >= target {
+		if actual >= target {
 			percentRemaining := 0.0
 			return &Budget{
 				Total:            fmt.Sprintf("%.1f", target),
@@ -65,7 +66,7 @@ func calculateThreshold(target float64, actual float64, operator string, window 
 				Remaining:        fmt.Sprintf("%.1f", target-actual),
 				PercentRemaining: percentRemaining,
 			}, nil
-		 } else {
+		} else {
 			percentRemaining := (100.0 * actual) / target
 			return &Budget{
 				Total:            fmt.Sprintf("%.1f", target),
@@ -73,7 +74,7 @@ func calculateThreshold(target float64, actual float64, operator string, window 
 				Remaining:        fmt.Sprintf("%.1f", target-actual),
 				PercentRemaining: percentRemaining,
 			}, nil
-		 }
+		}
 	case ">", ">=":
 		if actual <= target {
 			percentRemaining := 0.0
@@ -84,7 +85,7 @@ func calculateThreshold(target float64, actual float64, operator string, window 
 				PercentRemaining: percentRemaining,
 			}, nil
 		} else {
-			percentRemaining := ((actual / target) * 100.0 ) - 100.0
+			percentRemaining := ((actual / target) * 100.0) - 100.0
 			return &Budget{
 				Total:            fmt.Sprintf("%.1f", target),
 				Consumed:         fmt.Sprintf("%.1f", actual),
@@ -93,12 +94,12 @@ func calculateThreshold(target float64, actual float64, operator string, window 
 			}, nil
 		}
 	}
-	return nil,nil 
+	return nil, nil
 }
 func Calculate(obj observabilityv1alpha1.Objective, sliValue float64) (*Budget, error) {
 	switch obj.Sli.Type {
 	case "threshold":
-		return calculateThreshold(obj.Target, sliValue, obj.Sli.Operator, obj.Window)
+		return calculateThreshold(obj.Target, sliValue, obj.Sli.Operator)
 	default:
 		return calculatePercentage(obj.Target, sliValue, obj.Window)
 	}
