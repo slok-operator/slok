@@ -1,4 +1,7 @@
 # SLOK - Service Level Objectives for Kubernetes
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.20%2B-brightgreen.svg)](https://kubernetes.io)
+[![Go Report Card](https://goreportcard.com/badge/github.com/federicolepera/slok)](https://goreportcard.com/report/github.com/federicolepera/slok)
 
 SLOK is a Kubernetes operator that manages Service Level Objectives (SLOs) with automatic error budget tracking. Define your reliability targets as Kubernetes resources, and SLOK will continuously monitor them using Prometheus.
 
