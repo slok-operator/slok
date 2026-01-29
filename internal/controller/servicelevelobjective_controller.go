@@ -111,7 +111,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		// Determine status
 		logger.Info("SLI value", "objective_name", obj.Name, "sli_value", sliValue)
 
-		budget, err := errorbudget.Calculate(obj.Target, sliValue, obj.Window)
+		budget, err := errorbudget.Calculate(obj, sliValue)
 		if err != nil {
 			logger.Error(err, "unable to calculate error budget", "objective_name", obj.Name)
 			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{

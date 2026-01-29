@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
 )
 
 type Budget struct {
@@ -19,8 +21,7 @@ type Budget struct {
 	// PercentRemaining is the percentage of budget left (e.g., 75.69)
 	PercentRemaining float64
 }
-
-func Calculate(target float64, actual float64, window string) (*Budget, error) {
+func calculatePercentage(target float64, actual float64, window string) (*Budget, error) {
 	duration, err := parseWindow(window)
 	if err != nil {
 		return &Budget{}, err
@@ -51,6 +52,56 @@ func Calculate(target float64, actual float64, window string) (*Budget, error) {
 		Remaining:        fmt.Sprintf("%.1fm", remainingErrorSeconds/60.0),
 		PercentRemaining: math.Round(percentRemaining*100) / 100,
 	}, nil
+}
+
+func calculateThreshold(target float64, actual float64, operator string, window string) (*Budget, error) {
+	switch operator {
+	case "<", "<=":
+		 if actual >= target {
+			percentRemaining := 0.0
+			return &Budget{
+				Total:            fmt.Sprintf("%.1f", target),
+				Consumed:         fmt.Sprintf("%.1f", actual),
+				Remaining:        fmt.Sprintf("%.1f", target-actual),
+				PercentRemaining: percentRemaining,
+			}, nil
+		 } else {
+			percentRemaining := (100.0 * actual) / target
+			return &Budget{
+				Total:            fmt.Sprintf("%.1f", target),
+				Consumed:         fmt.Sprintf("%.1f", actual),
+				Remaining:        fmt.Sprintf("%.1f", target-actual),
+				PercentRemaining: percentRemaining,
+			}, nil
+		 }
+	case ">", ">=":
+		if actual <= target {
+			percentRemaining := 0.0
+			return &Budget{
+				Total:            fmt.Sprintf("%.1f", target),
+				Consumed:         fmt.Sprintf("%.1f", actual),
+				Remaining:        fmt.Sprintf("%.1f", actual-target),
+				PercentRemaining: percentRemaining,
+			}, nil
+		} else {
+			percentRemaining := ((actual / target) * 100.0 ) - 100.0
+			return &Budget{
+				Total:            fmt.Sprintf("%.1f", target),
+				Consumed:         fmt.Sprintf("%.1f", actual),
+				Remaining:        fmt.Sprintf("%.1f", actual-target),
+				PercentRemaining: percentRemaining,
+			}, nil
+		}
+	}
+	return nil,nil 
+}
+func Calculate(obj observabilityv1alpha1.Objective, sliValue float64) (*Budget, error) {
+	switch obj.Sli.Type {
+	case "threshold":
+		return calculateThreshold(obj.Target, sliValue, obj.Sli.Operator, obj.Window)
+	default:
+		return calculatePercentage(obj.Target, sliValue, obj.Window)
+	}
 }
 
 // parseWindow converts window string to duration
