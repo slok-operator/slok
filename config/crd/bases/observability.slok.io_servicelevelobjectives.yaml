@@ -51,6 +51,68 @@ spec:
                   up the Service Level Objective.
                 items:
                   properties:
+                    alerting:
+                      properties:
+                        budgetAlerts:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              percent:
+                                type: number
+                              severity:
+                                type: string
+                            required:
+                            - name
+                            - percent
+                            - severity
+                            type: object
+                          type: array
+                        burnRateAlerts:
+                          items:
+                            description: |-
+                              EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+                              NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+                            properties:
+                              consumePercent:
+                                type: number
+                              consumeWindow:
+                                type: string
+                              longWindow:
+                                type: string
+                              name:
+                                type: string
+                              severity:
+                                type: string
+                              shortWindow:
+                                type: string
+                            required:
+                            - consumePercent
+                            - consumeWindow
+                            - longWindow
+                            - name
+                            - severity
+                            - shortWindow
+                            type: object
+                          type: array
+                        enabled:
+                          type: boolean
+                      required:
+                      - enabled
+                      type: object
+                    budgetAlert:
+                      properties:
+                        name:
+                          type: string
+                        percent:
+                          type: number
+                        severity:
+                          type: string
+                      required:
+                      - name
+                      - percent
+                      - severity
+                      type: object
                     name:
                       description: name is the unique name of the objective within
                         the Service Level Objective.
@@ -182,6 +244,29 @@ spec:
                     actual:
                       description: Actual current percentage (e.g., 99.87)
                       type: number
+                    burnRate:
+                      properties:
+                        burnRateThreshold:
+                          description: BurnRateThreshold is the threshold for alerting
+                          type: number
+                        longBurnRate:
+                          description: LongBurnRate represents the long-term burn
+                            rate
+                          type: number
+                        shortBurnRate:
+                          description: ShortBurnRate represents the short-term burn
+                            rate
+                          type: number
+                        status:
+                          description: Status indicates if burn rate is within acceptable
+                            limits
+                          type: string
+                      required:
+                      - burnRateThreshold
+                      - longBurnRate
+                      - shortBurnRate
+                      - status
+                      type: object
                     errorBudget:
                       description: ErrorBudget details
                       properties:

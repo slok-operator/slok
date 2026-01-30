@@ -22,6 +22,24 @@ import (
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+type BurnRateAlert struct {
+	Name           string  `json:"name"`
+	ConsumePercent float64 `json:"consumePercent"`
+	ConsumeWindow  string  `json:"consumeWindow"`
+	LongWindow     string  `json:"longWindow"`
+	ShortWindow    string  `json:"shortWindow"`
+	Severity       string  `json:"severity"`
+}
+type BudgetAlert struct {
+	Name     string  `json:"name"`
+	Percent  float64 `json:"percent"`
+	Severity string  `json:"severity"`
+}
+type Alerting struct {
+	Enabled        bool            `json:"enabled"`
+	BudgetAlerts   []BudgetAlert   `json:"budgetAlerts,omitempty"`
+	BurnRateAlerts []BurnRateAlert `json:"burnRateAlerts,omitempty"`
+}
 type Query struct {
 	Success string `json:"success"`
 	Total   string `json:"total"`
@@ -46,6 +64,9 @@ type Objective struct {
 	// +required
 	Window string `json:"window"`
 	Sli    SLI    `json:"sli"`
+
+	Alerting    Alerting    `json:"alerting,omitempty"`
+	BudgetAlert BudgetAlert `json:"budgetAlert,omitempty"`
 }
 
 // ServiceLevelObjectiveSpec defines the desired state of ServiceLevelObjective
@@ -82,6 +103,19 @@ type ErrorBudgetStatus struct {
 	PercentRemaining float64 `json:"percentRemaining"`
 }
 
+type BurnRateStatus struct {
+	// LongBurnRate represents the long-term burn rate
+	LongBurnRate float64 `json:"longBurnRate"`
+
+	// ShortBurnRate represents the short-term burn rate
+	ShortBurnRate float64 `json:"shortBurnRate"`
+
+	// BurnRateThreshold is the threshold for alerting
+	BurnRateThreshold float64 `json:"burnRateThreshold"`
+
+	// Status indicates if burn rate is within acceptable limits
+	Status string `json:"status"`
+}
 type ObjectiveStatus struct {
 	// Name of the objective (matches Objective.Name)
 	Name string `json:"name"`
@@ -99,6 +133,7 @@ type ObjectiveStatus struct {
 	// ErrorBudget details
 	ErrorBudget ErrorBudgetStatus `json:"errorBudget"`
 
+	BurnRate BurnRateStatus `json:"burnRate,omitempty"`
 	// LastQueried is when we last queried Prometheus
 	// +optional
 	LastQueried metav1.Time `json:"lastQueried,omitempty"`
