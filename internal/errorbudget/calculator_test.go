@@ -8,11 +8,12 @@ import (
 
 func TestCalculate(t *testing.T) {
 	tests := []struct {
-		name           string
-		objective      observabilityv1alpha1.Objective
-		sliValue       float64
-		expectedBudget *Budget
-		expectError    bool
+		name            string
+		objective       observabilityv1alpha1.Objective
+		sliSuccessValue float64
+		sliTotalValue   float64
+		expectedBudget  *Budget
+		expectError     bool
 	}{
 		{
 			name: "Valid percentage calculation with 30d window",
@@ -20,9 +21,10 @@ func TestCalculate(t *testing.T) {
 				Name:   "availability",
 				Target: 99.9,
 				Window: "30d",
-				Sli:    observabilityv1alpha1.SLI{Type: "percentage", Query: "dummy"},
+				Sli:    observabilityv1alpha1.SLI{Query: observabilityv1alpha1.Query{Success: "dummy_success", Total: "dummy_total"}},
 			},
-			sliValue: 99.5,
+			sliSuccessValue: 995,
+			sliTotalValue:   1000,
 			expectedBudget: &Budget{
 				Total:            "43.2m",
 				Consumed:         "216.0m",
@@ -37,9 +39,10 @@ func TestCalculate(t *testing.T) {
 				Name:   "availability",
 				Target: 99.0,
 				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Type: "percentage", Query: "dummy"},
+				Sli:    observabilityv1alpha1.SLI{Query: observabilityv1alpha1.Query{Success: "dummy_success", Total: "dummy_total"}},
 			},
-			sliValue: 99.5,
+			sliSuccessValue: 995,
+			sliTotalValue:   1000,
 			expectedBudget: &Budget{
 				Total:            "100.8m",
 				Consumed:         "50.4m",
@@ -49,14 +52,15 @@ func TestCalculate(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "At risk scenario (percentage)",
+			name: "At risk scenario",
 			objective: observabilityv1alpha1.Objective{
 				Name:   "availability",
 				Target: 99.5,
 				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Type: "percentage", Query: "dummy"},
+				Sli:    observabilityv1alpha1.SLI{Query: observabilityv1alpha1.Query{Success: "dummy_success", Total: "dummy_total"}},
 			},
-			sliValue: 99.545,
+			sliSuccessValue: 99545,
+			sliTotalValue:   100000,
 			expectedBudget: &Budget{
 				Total:            "50.4m",
 				Consumed:         "45.9m",
@@ -66,94 +70,27 @@ func TestCalculate(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "Threshold < operator - within budget",
+			name: "Total is zero returns 100% actual",
 			objective: observabilityv1alpha1.Objective{
-				Name:   "latency-p99",
-				Target: 500,
+				Name:   "availability",
+				Target: 99.9,
 				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Type: "threshold", Query: "dummy", Operator: "<"},
+				Sli:    observabilityv1alpha1.SLI{Query: observabilityv1alpha1.Query{Success: "dummy_success", Total: "dummy_total"}},
 			},
-			sliValue: 200,
+			sliSuccessValue: 0,
+			sliTotalValue:   0,
 			expectedBudget: &Budget{
-				Total:            "500.0",
-				Consumed:         "200.0",
-				Remaining:        "300.0",
-				PercentRemaining: 40,
-			},
-			expectError: false,
-		},
-		{
-			name: "Threshold < operator - budget exhausted",
-			objective: observabilityv1alpha1.Objective{
-				Name:   "latency-p99",
-				Target: 500,
-				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Type: "threshold", Query: "dummy", Operator: "<"},
-			},
-			sliValue: 600,
-			expectedBudget: &Budget{
-				Total:            "500.0",
-				Consumed:         "600.0",
-				Remaining:        "-100.0",
-				PercentRemaining: 0,
-			},
-			expectError: false,
-		},
-		{
-			name: "Threshold > operator - within budget",
-			objective: observabilityv1alpha1.Objective{
-				Name:   "throughput",
-				Target: 1000,
-				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Type: "threshold", Query: "dummy", Operator: ">"},
-			},
-			sliValue: 1500,
-			expectedBudget: &Budget{
-				Total:            "1000.0",
-				Consumed:         "1500.0",
-				Remaining:        "500.0",
-				PercentRemaining: 50,
-			},
-			expectError: false,
-		},
-		{
-			name: "Threshold > operator - budget exhausted",
-			objective: observabilityv1alpha1.Objective{
-				Name:   "throughput",
-				Target: 1000,
-				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Type: "threshold", Query: "dummy", Operator: ">"},
-			},
-			sliValue: 800,
-			expectedBudget: &Budget{
-				Total:            "1000.0",
-				Consumed:         "800.0",
-				Remaining:        "-200.0",
-				PercentRemaining: 0,
-			},
-			expectError: false,
-		},
-		{
-			name: "Threshold <= operator - at boundary",
-			objective: observabilityv1alpha1.Objective{
-				Name:   "latency",
-				Target: 300,
-				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Type: "threshold", Query: "dummy", Operator: "<="},
-			},
-			sliValue: 300,
-			expectedBudget: &Budget{
-				Total:            "300.0",
-				Consumed:         "300.0",
-				Remaining:        "0.0",
-				PercentRemaining: 0,
+				Total:            "10.1m",
+				Consumed:         "0.0m",
+				Remaining:        "10.1m",
+				PercentRemaining: 100,
 			},
 			expectError: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			budget, err := Calculate(tt.objective, tt.sliValue)
+			budget, _, err := Calculate(tt.objective, tt.sliSuccessValue, tt.sliTotalValue)
 			if (err != nil) != tt.expectError {
 				t.Errorf("Calculate() error = %v, expectError %v", err, tt.expectError)
 				return

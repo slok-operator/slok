@@ -22,12 +22,18 @@ type Budget struct {
 	PercentRemaining float64
 }
 
-func calculatePercentage(target float64, actual float64, window string) (*Budget, error) {
+func calculatePercentage(target float64, sliSuccessValue float64, sliTotalValue float64, window string) (*Budget, float64, error) {
 	duration, err := parseWindow(window)
 	if err != nil {
-		return &Budget{}, err
+		return &Budget{}, 0.0, err
 	}
 	totalSeconds := duration.Seconds()
+	actual := 0.0
+	if sliTotalValue > 0 {
+		actual = (sliSuccessValue / sliTotalValue) * 100.0
+	} else if sliTotalValue == 0.0 {
+		actual = 100.0
+	}
 	errorBudgetPercent := 100.0 - target
 	errorBudgetSeconds := (errorBudgetPercent / 100.0) * totalSeconds
 
@@ -52,10 +58,10 @@ func calculatePercentage(target float64, actual float64, window string) (*Budget
 		Consumed:         fmt.Sprintf("%.1fm", consumedErrorSeconds/60.0),
 		Remaining:        fmt.Sprintf("%.1fm", remainingErrorSeconds/60.0),
 		PercentRemaining: math.Round(percentRemaining*100) / 100,
-	}, nil
+	}, actual, nil
 }
 
-func calculateThreshold(target float64, actual float64, operator string) (*Budget, error) {
+func calculateThreshold(target float64, actual float64, operator string) (*Budget, float64, error) {
 	switch operator {
 	case "<", "<=":
 		if actual >= target {
@@ -65,7 +71,7 @@ func calculateThreshold(target float64, actual float64, operator string) (*Budge
 				Consumed:         fmt.Sprintf("%.1f", actual),
 				Remaining:        fmt.Sprintf("%.1f", target-actual),
 				PercentRemaining: percentRemaining,
-			}, nil
+			}, actual, nil
 		} else {
 			percentRemaining := (100.0 * actual) / target
 			return &Budget{
@@ -73,7 +79,7 @@ func calculateThreshold(target float64, actual float64, operator string) (*Budge
 				Consumed:         fmt.Sprintf("%.1f", actual),
 				Remaining:        fmt.Sprintf("%.1f", target-actual),
 				PercentRemaining: percentRemaining,
-			}, nil
+			}, actual,nil
 		}
 	case ">", ">=":
 		if actual <= target {
@@ -83,7 +89,7 @@ func calculateThreshold(target float64, actual float64, operator string) (*Budge
 				Consumed:         fmt.Sprintf("%.1f", actual),
 				Remaining:        fmt.Sprintf("%.1f", actual-target),
 				PercentRemaining: percentRemaining,
-			}, nil
+			}, actual, nil
 		} else {
 			percentRemaining := ((actual / target) * 100.0) - 100.0
 			return &Budget{
@@ -91,18 +97,13 @@ func calculateThreshold(target float64, actual float64, operator string) (*Budge
 				Consumed:         fmt.Sprintf("%.1f", actual),
 				Remaining:        fmt.Sprintf("%.1f", actual-target),
 				PercentRemaining: percentRemaining,
-			}, nil
+			}, actual, nil
 		}
 	}
-	return nil, nil
+	return nil, 0.0, nil
 }
-func Calculate(obj observabilityv1alpha1.Objective, sliValue float64) (*Budget, error) {
-	switch obj.Sli.Type {
-	case "threshold":
-		return calculateThreshold(obj.Target, sliValue, obj.Sli.Operator)
-	default:
-		return calculatePercentage(obj.Target, sliValue, obj.Window)
-	}
+func Calculate(obj observabilityv1alpha1.Objective, sliSuccessValue float64, sliTotalValue float64) (*Budget, float64,error) {
+	return calculatePercentage(obj.Target, sliSuccessValue, sliTotalValue, obj.Window)
 }
 
 // parseWindow converts window string to duration
