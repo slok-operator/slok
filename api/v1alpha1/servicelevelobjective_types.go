@@ -20,62 +20,130 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// BurnRateAlert defines a burn rate alerting rule.
+// It determines how fast the error budget is being consumed
+// and triggers alerts when the burn rate exceeds the threshold.
 type BurnRateAlert struct {
-	Name           string  `json:"name"`
+	// name is the unique identifier for this burn rate alert.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Name string `json:"name"`
+
+	// consumePercent is the percentage of error budget that would be consumed
+	// within the consumeWindow at the current burn rate to trigger the alert (e.g., 2.0 means 2%).
+	// +kubebuilder:validation:Minimum=0
+	// +required
 	ConsumePercent float64 `json:"consumePercent"`
-	ConsumeWindow  string  `json:"consumeWindow"`
-	LongWindow     string  `json:"longWindow"`
-	ShortWindow    string  `json:"shortWindow"`
-	Severity       string  `json:"severity"`
+
+	// consumeWindow is the time window used to compute the burn rate threshold (e.g., "1h", "6h").
+	// +kubebuilder:validation:Pattern=`^(\d+d|\d+h|\d+m|\d+s)$`
+	// +required
+	ConsumeWindow string `json:"consumeWindow"`
+
+	// longWindow is the long observation window for the burn rate query (e.g., "1h").
+	// +kubebuilder:validation:Pattern=`^(\d+d|\d+h|\d+m|\d+s)$`
+	// +required
+	LongWindow string `json:"longWindow"`
+
+	// shortWindow is the short observation window for the burn rate query (e.g., "5m").
+	// +kubebuilder:validation:Pattern=`^(\d+d|\d+h|\d+m|\d+s)$`
+	// +required
+	ShortWindow string `json:"shortWindow"`
+
+	// severity is the alert severity level (e.g., "critical", "warning").
+	// +kubebuilder:validation:Enum=critical;warning;info
+	// +required
+	Severity string `json:"severity"`
 }
+
+// BudgetAlert defines an error budget threshold alerting rule.
+// It triggers an alert when the remaining error budget drops below the specified percentage.
 type BudgetAlert struct {
-	Name     string  `json:"name"`
-	Percent  float64 `json:"percent"`
-	Severity string  `json:"severity"`
+	// name is the unique identifier for this budget alert.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Name string `json:"name"`
+
+	// percent is the error budget remaining threshold below which the alert fires (e.g., 10.0 means < 10%).
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	// +required
+	Percent float64 `json:"percent"`
+
+	// severity is the alert severity level (e.g., "critical", "warning").
+	// +kubebuilder:validation:Enum=critical;warning;info
+	// +required
+	Severity string `json:"severity"`
 }
+
+// Alerting configures the alerting behaviour for an objective.
+// When enabled, PrometheusRule resources are created for budget and/or burn rate alerts.
 type Alerting struct {
-	Enabled        bool            `json:"enabled"`
-	BudgetAlerts   []BudgetAlert   `json:"budgetAlerts,omitempty"`
+	// enabled controls whether PrometheusRule resources are generated for this objective.
+	// +required
+	Enabled bool `json:"enabled"`
+
+	// budgetAlerts is a list of error budget threshold alerts.
+	// +optional
+	BudgetAlerts []BudgetAlert `json:"budgetAlerts,omitempty"`
+
+	// burnRateAlerts is a list of burn rate alerting rules.
+	// +optional
 	BurnRateAlerts []BurnRateAlert `json:"burnRateAlerts,omitempty"`
 }
+
+// Query holds the PromQL queries used to compute the SLI ratio (success / total).
 type Query struct {
+	// success is the PromQL query that returns the count of successful events (numerator).
+	// +required
 	Success string `json:"success"`
-	Total   string `json:"total"`
+
+	// total is the PromQL query that returns the total count of events (denominator).
+	// +required
+	Total string `json:"total"`
 }
+
+// SLI (Service Level Indicator) defines how the objective is measured.
 type SLI struct {
-	// PromQL query that returns the SLI value
+	// query contains the PromQL queries used to compute the SLI value.
+	// +required
 	Query Query `json:"query"`
 }
+
+// Objective represents a single measurable target within a ServiceLevelObjective.
 type Objective struct {
 	// name is the unique name of the objective within the Service Level Objective.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=100
 	// +required
 	Name string `json:"name"`
-	// targetPercentage is the target percentage for the objective (e.g., 99.9).
-	// Target as percentage (e.g. 99.9, 95.5)
+
+	// target is the target percentage for the objective (e.g., 99.9).
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=200
+	// +required
 	Target float64 `json:"target"`
+
 	// window is the time window over which the objective is measured (e.g., "30d" for 30 days).
 	// +kubebuilder:validation:Pattern=`^(\d+d|\d+h|\d+m|\d+s)$`
 	// +required
 	Window string `json:"window"`
-	Sli    SLI    `json:"sli"`
 
-	Alerting    Alerting    `json:"alerting,omitempty"`
+	// sli defines the Service Level Indicator used to measure this objective.
+	// +required
+	Sli SLI `json:"sli"`
+
+	// alerting configures alerting rules (budget and burn rate) for this objective.
+	// +optional
+	Alerting Alerting `json:"alerting,omitempty"`
+
+	// budgetAlert is a single legacy budget alert configuration.
+	// +optional
 	BudgetAlert BudgetAlert `json:"budgetAlert,omitempty"`
 }
 
-// ServiceLevelObjectiveSpec defines the desired state of ServiceLevelObjective
+// ServiceLevelObjectiveSpec defines the desired state of a ServiceLevelObjective.
 type ServiceLevelObjectiveSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
-
 	// displayName is the human-readable name for the Service Level Objective.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=255
@@ -103,38 +171,45 @@ type ErrorBudgetStatus struct {
 	PercentRemaining float64 `json:"percentRemaining"`
 }
 
+// BurnRateStatus represents the observed burn rate for an objective.
 type BurnRateStatus struct {
-	// LongBurnRate represents the long-term burn rate
+	// longBurnRate is the burn rate computed over the long observation window.
 	LongBurnRate float64 `json:"longBurnRate"`
 
-	// ShortBurnRate represents the short-term burn rate
+	// shortBurnRate is the burn rate computed over the short observation window.
 	ShortBurnRate float64 `json:"shortBurnRate"`
 
-	// BurnRateThreshold is the threshold for alerting
+	// burnRateThreshold is the computed threshold above which the burn rate is considered excessive.
 	BurnRateThreshold float64 `json:"burnRateThreshold"`
 
-	// Status indicates if burn rate is within acceptable limits
+	// status indicates whether the burn rate is within acceptable limits.
+	// +kubebuilder:validation:Enum=true;false;unknown
 	Status string `json:"status"`
 }
+
+// ObjectiveStatus represents the observed state of a single objective.
 type ObjectiveStatus struct {
-	// Name of the objective (matches Objective.Name)
+	// name of the objective (matches Objective.Name).
 	Name string `json:"name"`
 
-	// Target percentage (copied from spec for convenience)
+	// target percentage (copied from spec for convenience).
 	Target float64 `json:"target"`
 
-	// Actual current percentage (e.g., 99.87)
+	// actual is the current SLI percentage (e.g., 99.87).
 	Actual float64 `json:"actual"`
 
-	// Status indicates if objective is being met
+	// status indicates whether the objective is being met.
 	// +kubebuilder:validation:Enum=met;at-risk;violated;unknown
 	Status string `json:"status"`
 
-	// ErrorBudget details
+	// errorBudget contains details about error budget consumption.
 	ErrorBudget ErrorBudgetStatus `json:"errorBudget"`
 
+	// burnRate contains the observed burn rate metrics.
+	// +optional
 	BurnRate BurnRateStatus `json:"burnRate,omitempty"`
-	// LastQueried is when we last queried Prometheus
+
+	// lastQueried is the timestamp of the last Prometheus query for this objective.
 	// +optional
 	LastQueried metav1.Time `json:"lastQueried,omitempty"`
 }

@@ -50,17 +50,40 @@ spec:
                 description: objectives is a list of individual objectives that make
                   up the Service Level Objective.
                 items:
+                  description: Objective represents a single measurable target within
+                    a ServiceLevelObjective.
                   properties:
                     alerting:
+                      description: alerting configures alerting rules (budget and
+                        burn rate) for this objective.
                       properties:
                         budgetAlerts:
+                          description: budgetAlerts is a list of error budget threshold
+                            alerts.
                           items:
+                            description: |-
+                              BudgetAlert defines an error budget threshold alerting rule.
+                              It triggers an alert when the remaining error budget drops below the specified percentage.
                             properties:
                               name:
+                                description: name is the unique identifier for this
+                                  budget alert.
+                                minLength: 1
                                 type: string
                               percent:
+                                description: percent is the error budget remaining
+                                  threshold below which the alert fires (e.g., 10.0
+                                  means < 10%).
+                                maximum: 100
+                                minimum: 0
                                 type: number
                               severity:
+                                description: severity is the alert severity level
+                                  (e.g., "critical", "warning").
+                                enum:
+                                - critical
+                                - warning
+                                - info
                                 type: string
                             required:
                             - name
@@ -69,22 +92,48 @@ spec:
                             type: object
                           type: array
                         burnRateAlerts:
+                          description: burnRateAlerts is a list of burn rate alerting
+                            rules.
                           items:
                             description: |-
-                              EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-                              NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+                              BurnRateAlert defines a burn rate alerting rule.
+                              It determines how fast the error budget is being consumed
+                              and triggers alerts when the burn rate exceeds the threshold.
                             properties:
                               consumePercent:
+                                description: |-
+                                  consumePercent is the percentage of error budget that would be consumed
+                                  within the consumeWindow at the current burn rate to trigger the alert (e.g., 2.0 means 2%).
+                                minimum: 0
                                 type: number
                               consumeWindow:
+                                description: consumeWindow is the time window used
+                                  to compute the burn rate threshold (e.g., "1h",
+                                  "6h").
+                                pattern: ^(\d+d|\d+h|\d+m|\d+s)$
                                 type: string
                               longWindow:
+                                description: longWindow is the long observation window
+                                  for the burn rate query (e.g., "1h").
+                                pattern: ^(\d+d|\d+h|\d+m|\d+s)$
                                 type: string
                               name:
+                                description: name is the unique identifier for this
+                                  burn rate alert.
+                                minLength: 1
                                 type: string
                               severity:
+                                description: severity is the alert severity level
+                                  (e.g., "critical", "warning").
+                                enum:
+                                - critical
+                                - warning
+                                - info
                                 type: string
                               shortWindow:
+                                description: shortWindow is the short observation
+                                  window for the burn rate query (e.g., "5m").
+                                pattern: ^(\d+d|\d+h|\d+m|\d+s)$
                                 type: string
                             required:
                             - consumePercent
@@ -96,17 +145,33 @@ spec:
                             type: object
                           type: array
                         enabled:
+                          description: enabled controls whether PrometheusRule resources
+                            are generated for this objective.
                           type: boolean
                       required:
                       - enabled
                       type: object
                     budgetAlert:
+                      description: budgetAlert is a single legacy budget alert configuration.
                       properties:
                         name:
+                          description: name is the unique identifier for this budget
+                            alert.
+                          minLength: 1
                           type: string
                         percent:
+                          description: percent is the error budget remaining threshold
+                            below which the alert fires (e.g., 10.0 means < 10%).
+                          maximum: 100
+                          minimum: 0
                           type: number
                         severity:
+                          description: severity is the alert severity level (e.g.,
+                            "critical", "warning").
+                          enum:
+                          - critical
+                          - warning
+                          - info
                           type: string
                       required:
                       - name
@@ -120,13 +185,20 @@ spec:
                       minLength: 1
                       type: string
                     sli:
+                      description: sli defines the Service Level Indicator used to
+                        measure this objective.
                       properties:
                         query:
-                          description: PromQL query that returns the SLI value
+                          description: query contains the PromQL queries used to compute
+                            the SLI value.
                           properties:
                             success:
+                              description: success is the PromQL query that returns
+                                the count of successful events (numerator).
                               type: string
                             total:
+                              description: total is the PromQL query that returns
+                                the total count of events (denominator).
                               type: string
                           required:
                           - success
@@ -136,9 +208,8 @@ spec:
                       - query
                       type: object
                     target:
-                      description: |-
-                        targetPercentage is the target percentage for the objective (e.g., 99.9).
-                        Target as percentage (e.g. 99.9, 95.5)
+                      description: target is the target percentage for the objective
+                        (e.g., 99.9).
                       maximum: 200
                       minimum: 0
                       type: number
@@ -240,26 +311,34 @@ spec:
                 description: objectives represent the current status of each objective
                   defined in the spec.
                 items:
+                  description: ObjectiveStatus represents the observed state of a
+                    single objective.
                   properties:
                     actual:
-                      description: Actual current percentage (e.g., 99.87)
+                      description: actual is the current SLI percentage (e.g., 99.87).
                       type: number
                     burnRate:
+                      description: burnRate contains the observed burn rate metrics.
                       properties:
                         burnRateThreshold:
-                          description: BurnRateThreshold is the threshold for alerting
+                          description: burnRateThreshold is the computed threshold
+                            above which the burn rate is considered excessive.
                           type: number
                         longBurnRate:
-                          description: LongBurnRate represents the long-term burn
-                            rate
+                          description: longBurnRate is the burn rate computed over
+                            the long observation window.
                           type: number
                         shortBurnRate:
-                          description: ShortBurnRate represents the short-term burn
-                            rate
+                          description: shortBurnRate is the burn rate computed over
+                            the short observation window.
                           type: number
                         status:
-                          description: Status indicates if burn rate is within acceptable
-                            limits
+                          description: status indicates whether the burn rate is within
+                            acceptable limits.
+                          enum:
+                          - true
+                          - false
+                          - unknown
                           type: string
                       required:
                       - burnRateThreshold
@@ -268,7 +347,8 @@ spec:
                       - status
                       type: object
                     errorBudget:
-                      description: ErrorBudget details
+                      description: errorBudget contains details about error budget
+                        consumption.
                       properties:
                         consumed:
                           description: Consumed error budget so far (e.g., "10.5m")
@@ -291,14 +371,16 @@ spec:
                       - total
                       type: object
                     lastQueried:
-                      description: LastQueried is when we last queried Prometheus
+                      description: lastQueried is the timestamp of the last Prometheus
+                        query for this objective.
                       format: date-time
                       type: string
                     name:
-                      description: Name of the objective (matches Objective.Name)
+                      description: name of the objective (matches Objective.Name).
                       type: string
                     status:
-                      description: Status indicates if objective is being met
+                      description: status indicates whether the objective is being
+                        met.
                       enum:
                       - met
                       - at-risk
@@ -306,7 +388,7 @@ spec:
                       - unknown
                       type: string
                     target:
-                      description: Target percentage (copied from spec for convenience)
+                      description: target percentage (copied from spec for convenience).
                       type: number
                   required:
                   - actual
