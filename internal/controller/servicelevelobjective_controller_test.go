@@ -57,6 +57,17 @@ func (m *MockPrometheusClient) QuerySLI(ctx context.Context, query string) (floa
 	return 0, fmt.Errorf("no mock value for query: %s", query)
 }
 
+func (m *MockPrometheusClient) QuerySLINotNormalized(ctx context.Context, query string) (float64, error) {
+	m.QueryCallCount++
+	if err, ok := m.SLIErrors[query]; ok {
+		return 0, err
+	}
+	if val, ok := m.SLIValues[query]; ok {
+		return val, nil
+	}
+	return 0, fmt.Errorf("no mock value for query: %s", query)
+}
+
 func (m *MockPrometheusClient) CheckConnection(ctx context.Context) error {
 	m.ConnectCallCount++
 	return m.ConnectionError
@@ -103,6 +114,18 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 										Total:   "sum(rate(http_requests_total[5m]))",
 									},
 								},
+								Alerting: observabilityv1alpha1.Alerting{
+									BurnRateAlerts: []observabilityv1alpha1.BurnRateAlert{
+										{
+											Name:           "HighBurnRate",
+											ConsumePercent: 2.0,
+											ConsumeWindow:  "1h",
+											LongWindow:     "1h",
+											ShortWindow:    "5m",
+											Severity:       "critical",
+										},
+									},
+								},
 							},
 						},
 					},
@@ -125,6 +148,9 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			// success=9995, total=10000 → actual = (9995/10000)*100 = 99.95
 			mockPrometheus.SLIValues["sum(rate(http_requests_total{code=~\"2..\"}[5m]))"] = 9995
 			mockPrometheus.SLIValues["sum(rate(http_requests_total[5m]))"] = 10000
+			// Burn rate queries (short=5m, long=1h)
+			mockPrometheus.SLIValues[`avg_over_time((sum(rate(http_requests_total{code=~"2.."}[5m])) / sum(rate(http_requests_total[5m])))[5m:1m])`] = 0.9995
+			mockPrometheus.SLIValues[`avg_over_time((sum(rate(http_requests_total{code=~"2.."}[5m])) / sum(rate(http_requests_total[5m])))[1h:1m])`] = 0.9995
 
 			By("Reconciling the created resource")
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
@@ -146,8 +172,8 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			Expect(updatedSLO.Status.Objectives[0].Status).To(Equal("met"))
 			Expect(updatedSLO.Status.Objectives[0].Actual).To(Equal(99.95))
 
-			By("Verifying Prometheus was called")
-			Expect(mockPrometheus.QueryCallCount).To(Equal(2))
+			By("Verifying Prometheus was called (2 QuerySLI + 2 QuerySLINotNormalized)")
+			Expect(mockPrometheus.QueryCallCount).To(Equal(4))
 			Expect(mockPrometheus.ConnectCallCount).To(Equal(1))
 		})
 
@@ -156,6 +182,9 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			// success=995, total=1000 → actual = (995/1000)*100 = 99.5
 			mockPrometheus.SLIValues["sum(rate(http_requests_total{code=~\"2..\"}[5m]))"] = 995
 			mockPrometheus.SLIValues["sum(rate(http_requests_total[5m]))"] = 1000
+			// Burn rate queries
+			mockPrometheus.SLIValues[`avg_over_time((sum(rate(http_requests_total{code=~"2.."}[5m])) / sum(rate(http_requests_total[5m])))[5m:1m])`] = 0.995
+			mockPrometheus.SLIValues[`avg_over_time((sum(rate(http_requests_total{code=~"2.."}[5m])) / sum(rate(http_requests_total[5m])))[1h:1m])`] = 0.995
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -178,6 +207,9 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			// success=99905, total=100000 → actual = (99905/100000)*100 = 99.905
 			mockPrometheus.SLIValues["sum(rate(http_requests_total{code=~\"2..\"}[5m]))"] = 99905
 			mockPrometheus.SLIValues["sum(rate(http_requests_total[5m]))"] = 100000
+			// Burn rate queries
+			mockPrometheus.SLIValues[`avg_over_time((sum(rate(http_requests_total{code=~"2.."}[5m])) / sum(rate(http_requests_total[5m])))[5m:1m])`] = 0.99905
+			mockPrometheus.SLIValues[`avg_over_time((sum(rate(http_requests_total{code=~"2.."}[5m])) / sum(rate(http_requests_total[5m])))[1h:1m])`] = 0.99905
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -283,6 +315,18 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 										Total:   "availability_total_query",
 									},
 								},
+								Alerting: observabilityv1alpha1.Alerting{
+									BurnRateAlerts: []observabilityv1alpha1.BurnRateAlert{
+										{
+											Name:           "HighBurnRate",
+											ConsumePercent: 2.0,
+											ConsumeWindow:  "1h",
+											LongWindow:     "1h",
+											ShortWindow:    "5m",
+											Severity:       "critical",
+										},
+									},
+								},
 							},
 							{
 								Name:   "latency",
@@ -292,6 +336,18 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 									Query: observabilityv1alpha1.Query{
 										Success: "latency_success_query",
 										Total:   "latency_total_query",
+									},
+								},
+								Alerting: observabilityv1alpha1.Alerting{
+									BurnRateAlerts: []observabilityv1alpha1.BurnRateAlert{
+										{
+											Name:           "HighBurnRate",
+											ConsumePercent: 2.0,
+											ConsumeWindow:  "1h",
+											LongWindow:     "1h",
+											ShortWindow:    "5m",
+											Severity:       "critical",
+										},
 									},
 								},
 							},
@@ -316,9 +372,15 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			// availability: success=9995, total=10000 → actual = 99.95 → met
 			mockPrometheus.SLIValues["availability_success_query"] = 9995
 			mockPrometheus.SLIValues["availability_total_query"] = 10000
+			// availability burn rate queries
+			mockPrometheus.SLIValues["avg_over_time((availability_success_query / availability_total_query)[5m:1m])"] = 0.9995
+			mockPrometheus.SLIValues["avg_over_time((availability_success_query / availability_total_query)[1h:1m])"] = 0.9995
 			// latency: success=900, total=1000 → actual = 90.0 → violated
 			mockPrometheus.SLIValues["latency_success_query"] = 900
 			mockPrometheus.SLIValues["latency_total_query"] = 1000
+			// latency burn rate queries
+			mockPrometheus.SLIValues["avg_over_time((latency_success_query / latency_total_query)[5m:1m])"] = 0.90
+			mockPrometheus.SLIValues["avg_over_time((latency_success_query / latency_total_query)[1h:1m])"] = 0.90
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -352,8 +414,8 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			Expect(latencyStatus).NotTo(BeNil())
 			Expect(latencyStatus.Status).To(Equal("violated"))
 
-			By("Verifying all queries were made (2 per objective)")
-			Expect(mockPrometheus.QueryCallCount).To(Equal(4))
+			By("Verifying all queries were made (2 QuerySLI + 2 QuerySLINotNormalized per objective)")
+			Expect(mockPrometheus.QueryCallCount).To(Equal(8))
 		})
 	})
 })
