@@ -14,6 +14,7 @@ import (
 type PrometheusClient interface {
 	QuerySLI(ctx context.Context, query string) (float64, error)
 	CheckConnection(ctx context.Context) error
+	QuerySLINotNormalized(ctx context.Context, query string) (float64, error)
 }
 
 type Client struct {
@@ -63,6 +64,25 @@ func (c *Client) QuerySLI(ctx context.Context, query string) (float64, error) {
 	if value > 100 {
 		value = 100
 	}
+	return value, nil
+}
+
+func (c *Client) QuerySLINotNormalized(ctx context.Context, query string) (float64, error) {
+	result, warnings, err := c.api.Query(ctx, query, time.Now())
+	if err != nil {
+		return 0, err
+	}
+	if len(warnings) > 0 {
+		fmt.Printf("Prometheus query warnings: %v\n", warnings)
+	}
+	vectorResult, ok := result.(model.Vector)
+	if !ok {
+		return 0, fmt.Errorf("unexpected result type: %T", result)
+	}
+	if len(vectorResult) == 0 {
+		return 0, fmt.Errorf("no data returned for query: %s", query)
+	}
+	value := float64(vectorResult[0].Value)
 	return value, nil
 }
 
