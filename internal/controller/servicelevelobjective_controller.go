@@ -18,8 +18,11 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"time"
 
+	"github.com/federicolepera/slok/internal/burnrate"
 	sloklog "github.com/federicolepera/slok/internal/log"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -89,6 +92,17 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 	logger.Info("init reconcile ServiceLevelObjective", "name", slo.Name)
 
 	for _, obj := range slo.Spec.Objectives {
+		// Creation of Prometheus rules could be here if needed
+		if obj.Alerting.Enabled {
+			prometheusRule, err := prometheus.CreatePrometheusRule(slo.Name, slo.Namespace, obj.Name, obj.Alerting.BudgetAlerts, obj.Alerting.BurnRateAlerts)
+			if err != nil {
+				logger.Error(err, "unable to create Prometheus rule", "objective_name", obj.Name)
+			} else {
+				if err := r.Create(ctx, &prometheusRule); err != nil {
+					logger.Error(err, "unable to create Prometheus rule in cluster", "prometheus_rule", prometheusRule.Name)
+				}
+			}
+		}
 		logger.Info("Objective", "name", obj.Name, "target", obj.Target, "window", obj.Window, "sli_query", obj.Sli.Query)
 		// Validate SLI query window vs objective window
 		sliSuccessValue, err := r.PrometheusClient.QuerySLI(ctx, obj.Sli.Query.Success)
@@ -162,16 +176,37 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			obj.Name,
 			status,
 		).Set(1)
+
+		shortQuery := fmt.Sprintf("avg_over_time((%s / %s)[%s:1m])", obj.Sli.Query.Success, obj.Sli.Query.Total, obj.Alerting.BurnRateAlerts[0].ShortWindow)
+		sliErrBurnRateShort, err := r.PrometheusClient.QuerySLINotNormalized(ctx, shortQuery)
+		if err != nil {
+			logger.Error(err, "unable to query SLI for short burn rate", "sli_query", shortQuery)
+		}
+		longQuery := fmt.Sprintf("avg_over_time((%s / %s)[%s:1m])", obj.Sli.Query.Success, obj.Sli.Query.Total, obj.Alerting.BurnRateAlerts[0].LongWindow)
+		sliErrBurnRateLong, err := r.PrometheusClient.QuerySLINotNormalized(ctx, longQuery)
+		if err != nil {
+			logger.Error(err, "unable to query SLI for long burn rate", "sli_query", longQuery)
+		}
+		burnRate, err := burnrate.Calculate(obj, sliErrBurnRateShort, sliErrBurnRateLong)
+		if err != nil {
+			logger.Error(err, "unable to calculate burn rate", "objective_name", obj.Name)
+		}
 		objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
 			Name:   obj.Name,
 			Target: obj.Target,
-			Actual: sliValue,
+			Actual: math.Round(sliValue*100) / 100,
 			Status: status,
 			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
 				Total:            budget.Total,
 				Consumed:         budget.Consumed,
 				Remaining:        budget.Remaining,
 				PercentRemaining: budget.PercentRemaining,
+			},
+			BurnRate: observabilityv1alpha1.BurnRateStatus{
+				LongBurnRate:      burnRate.LongBurnRate,
+				ShortBurnRate:     burnRate.ShortBurnRate,
+				BurnRateThreshold: burnRate.BurnRateThreshold,
+				Status:            burnRate.Status,
 			},
 			LastQueried: metav1.Now(),
 		})
