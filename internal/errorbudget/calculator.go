@@ -61,48 +61,7 @@ func calculatePercentage(target float64, sliSuccessValue float64, sliTotalValue 
 	}, actual, nil
 }
 
-func calculateThreshold(target float64, actual float64, operator string) (*Budget, float64, error) {
-	switch operator {
-	case "<", "<=":
-		if actual >= target {
-			percentRemaining := 0.0
-			return &Budget{
-				Total:            fmt.Sprintf("%.1f", target),
-				Consumed:         fmt.Sprintf("%.1f", actual),
-				Remaining:        fmt.Sprintf("%.1f", target-actual),
-				PercentRemaining: percentRemaining,
-			}, actual, nil
-		} else {
-			percentRemaining := (100.0 * actual) / target
-			return &Budget{
-				Total:            fmt.Sprintf("%.1f", target),
-				Consumed:         fmt.Sprintf("%.1f", actual),
-				Remaining:        fmt.Sprintf("%.1f", target-actual),
-				PercentRemaining: percentRemaining,
-			}, actual,nil
-		}
-	case ">", ">=":
-		if actual <= target {
-			percentRemaining := 0.0
-			return &Budget{
-				Total:            fmt.Sprintf("%.1f", target),
-				Consumed:         fmt.Sprintf("%.1f", actual),
-				Remaining:        fmt.Sprintf("%.1f", actual-target),
-				PercentRemaining: percentRemaining,
-			}, actual, nil
-		} else {
-			percentRemaining := ((actual / target) * 100.0) - 100.0
-			return &Budget{
-				Total:            fmt.Sprintf("%.1f", target),
-				Consumed:         fmt.Sprintf("%.1f", actual),
-				Remaining:        fmt.Sprintf("%.1f", actual-target),
-				PercentRemaining: percentRemaining,
-			}, actual, nil
-		}
-	}
-	return nil, 0.0, nil
-}
-func Calculate(obj observabilityv1alpha1.Objective, sliSuccessValue float64, sliTotalValue float64) (*Budget, float64,error) {
+func Calculate(obj observabilityv1alpha1.Objective, sliSuccessValue float64, sliTotalValue float64) (*Budget, float64, error) {
 	return calculatePercentage(obj.Target, sliSuccessValue, sliTotalValue, obj.Window)
 }
 
