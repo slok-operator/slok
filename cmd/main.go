@@ -38,6 +38,7 @@ import (
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
 	"github.com/federicolepera/slok/internal/controller"
 	webhookv1alpha1 "github.com/federicolepera/slok/internal/webhook/v1alpha1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -50,6 +51,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(observabilityv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
