@@ -177,39 +177,64 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			status,
 		).Set(1)
 
-		shortQuery := fmt.Sprintf("avg_over_time((%s / %s)[%s:1m])", obj.Sli.Query.Success, obj.Sli.Query.Total, obj.Alerting.BurnRateAlerts[0].ShortWindow)
-		sliErrBurnRateShort, err := r.PrometheusClient.QuerySLINotNormalized(ctx, shortQuery)
-		if err != nil {
-			logger.Error(err, "unable to query SLI for short burn rate", "sli_query", shortQuery)
+		var burnRate *burnrate.BurnRate
+		for _, alert := range obj.Alerting.BurnRateAlerts {
+			shortQuery := fmt.Sprintf("avg_over_time((%s / %s)[%s:1m])", obj.Sli.Query.Success, obj.Sli.Query.Total, alert.ShortWindow)
+			sliErrBurnRateShort, err := r.PrometheusClient.QuerySLINotNormalized(ctx, shortQuery)
+			if err != nil {
+				logger.Error(err, "unable to query SLI for short burn rate", "sli_query", shortQuery)
+			}
+			longQuery := fmt.Sprintf("avg_over_time((%s / %s)[%s:1m])", obj.Sli.Query.Success, obj.Sli.Query.Total, alert.LongWindow)
+			sliErrBurnRateLong, err := r.PrometheusClient.QuerySLINotNormalized(ctx, longQuery)
+			if err != nil {
+				logger.Error(err, "unable to query SLI for long burn rate", "sli_query", longQuery)
+			}
+			burnRate, err = burnrate.Calculate(obj, sliErrBurnRateShort, sliErrBurnRateLong)
+			if err != nil {
+				logger.Error(err, "unable to calculate burn rate", "objective_name", obj.Name)
+			}
 		}
-		longQuery := fmt.Sprintf("avg_over_time((%s / %s)[%s:1m])", obj.Sli.Query.Success, obj.Sli.Query.Total, obj.Alerting.BurnRateAlerts[0].LongWindow)
-		sliErrBurnRateLong, err := r.PrometheusClient.QuerySLINotNormalized(ctx, longQuery)
-		if err != nil {
-			logger.Error(err, "unable to query SLI for long burn rate", "sli_query", longQuery)
+		if burnRate != nil {
+			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
+				Name:   obj.Name,
+				Target: obj.Target,
+				Actual: math.Round(sliValue*100) / 100,
+				Status: status,
+				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+					Total:            budget.Total,
+					Consumed:         budget.Consumed,
+					Remaining:        budget.Remaining,
+					PercentRemaining: budget.PercentRemaining,
+				},
+				BurnRate: observabilityv1alpha1.BurnRateStatus{
+					LongBurnRate:      burnRate.LongBurnRate,
+					ShortBurnRate:     burnRate.ShortBurnRate,
+					BurnRateThreshold: burnRate.BurnRateThreshold,
+					Status:            burnRate.Status,
+				},
+				LastQueried: metav1.Now(),
+			})
+		} else {
+			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
+				Name:   obj.Name,
+				Target: obj.Target,
+				Actual: math.Round(sliValue*100) / 100,
+				Status: "unknown",
+				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+					Total:            "unknown",
+					Consumed:         "unknown",
+					Remaining:        "unknown",
+					PercentRemaining: 0,
+				},
+				BurnRate: observabilityv1alpha1.BurnRateStatus{
+					LongBurnRate:      0,
+					ShortBurnRate:     0,
+					BurnRateThreshold: 0,
+					Status:            "unknown",
+				},
+				LastQueried: metav1.Now(),
+			})
 		}
-		burnRate, err := burnrate.Calculate(obj, sliErrBurnRateShort, sliErrBurnRateLong)
-		if err != nil {
-			logger.Error(err, "unable to calculate burn rate", "objective_name", obj.Name)
-		}
-		objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
-			Name:   obj.Name,
-			Target: obj.Target,
-			Actual: math.Round(sliValue*100) / 100,
-			Status: status,
-			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-				Total:            budget.Total,
-				Consumed:         budget.Consumed,
-				Remaining:        budget.Remaining,
-				PercentRemaining: budget.PercentRemaining,
-			},
-			BurnRate: observabilityv1alpha1.BurnRateStatus{
-				LongBurnRate:      burnRate.LongBurnRate,
-				ShortBurnRate:     burnRate.ShortBurnRate,
-				BurnRateThreshold: burnRate.BurnRateThreshold,
-				Status:            burnRate.Status,
-			},
-			LastQueried: metav1.Now(),
-		})
 	}
 	slo.Status.Objectives = objectiveStatuses
 	slo.Status.LastUpdateTime = metav1.Now()
