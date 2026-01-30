@@ -7,7 +7,7 @@ SLOK is a Kubernetes operator that manages Service Level Objectives (SLOs) with 
 
 ## Quick Start
 
-Get your first SLO running in 5 minutes:
+Get your first SLO running:
 
 ```bash
 # 1. Install the CRDs and operator
@@ -26,9 +26,9 @@ spec:
       target: 99.9
       window: 7d
       sli:
-        query: |
-          (sum(rate(http_requests_total{status=~"2.."}[5m]))
-           / sum(rate(http_requests_total[5m]))) * 100
+        query:
+          success: sum(rate(http_requests_total{status=~"2.."}[5m]))
+          total: sum(rate(http_requests_total[5m]))
 EOF
 
 # 3. Check the status
@@ -117,12 +117,9 @@ spec:
       target: 99.9        # Target: 99.9% successful requests
       window: 30d         # Over a 30-day rolling window
       sli:
-        query: |
-          (
-            sum(rate(http_requests_total{service="payment-api", status=~"2.."}[5m]))
-            /
-            sum(rate(http_requests_total{service="payment-api"}[5m]))
-          ) * 100
+        query:
+          success: sum(rate(http_requests_total{service="payment-api", status=~"2.."}[5m]))
+          total: sum(rate(http_requests_total{service="payment-api"}[5m]))
 ```
 
 ### Latency SLO
@@ -141,12 +138,9 @@ spec:
       target: 95.0        # 95% of requests should be under threshold
       window: 7d
       sli:
-        query: |
-          (
-            sum(rate(http_request_duration_seconds_bucket{service="checkout", le="0.5"}[5m]))
-            /
-            sum(rate(http_request_duration_seconds_count{service="checkout"}[5m]))
-          ) * 100
+        query:
+          success: sum(rate(http_request_duration_seconds_bucket{service="checkout", le="0.5"}[5m]))
+          total: sum(rate(http_request_duration_seconds_count{service="checkout"}[5m]))
 ```
 
 ### Multiple Objectives
@@ -165,17 +159,17 @@ spec:
       target: 99.95
       window: 30d
       sli:
-        query: |
-          (sum(rate(http_requests_total{job="api-gateway", status!~"5.."}[5m]))
-           / sum(rate(http_requests_total{job="api-gateway"}[5m]))) * 100
+        query:
+          success: sum(rate(http_requests_total{job="api-gateway", status!~"5.."}[5m]))
+          total: sum(rate(http_requests_total{job="api-gateway"}[5m]))
 
     - name: latency-p99
       target: 99.0
       window: 30d
       sli:
-        query: |
-          (sum(rate(http_request_duration_seconds_bucket{job="api-gateway", le="0.3"}[5m]))
-           / sum(rate(http_request_duration_seconds_count{job="api-gateway"}[5m]))) * 100
+        query:
+          success: sum(rate(http_request_duration_seconds_bucket{job="api-gateway", le="0.3"}[5m]))
+          total: sum(rate(http_request_duration_seconds_count{job="api-gateway"}[5m]))
 ```
 
 ### Check SLO Status
@@ -191,12 +185,17 @@ status:
     - name: availability
       target: 99.9
       actual: 99.87
-      status: met           # met | at-risk | violated
+      status: met           # met | at-risk | violated | unknown
       errorBudget:
         total: "43.2m"
         consumed: "10.5m"
         remaining: "32.7m"
         percentRemaining: 75.69
+      burnRate:
+        longBurnRate: 0.5
+        shortBurnRate: 0.48
+        burnRateThreshold: 14.4
+        status: "true"
       lastQueried: "2026-01-28T10:30:00Z"
   lastUpdateTime: "2026-01-28T10:30:00Z"
   conditions:
@@ -205,67 +204,158 @@ status:
       reason: Reconciled
 ```
 
-### Alerting with PrometheusRule
+## Alerting
 
-SLOK exposes metrics that you can use for alerting:
+When `alerting.enabled` is set to `true` on an objective, SLOK automatically generates
+`PrometheusRule` resources in the same namespace as the SLO. You can configure two
+kinds of alerts: error budget alerts and burn rate alerts.
+
+### Budget Alerts
+
+Budget alerts fire when the remaining error budget drops below a given percentage.
+If no custom `budgetAlerts` are provided, SLOK creates two default rules:
+
+- **SLOObjectiveAtRisk** (warning) -- remaining budget is between 0% and 10%.
+- **SLOObjectiveViolated** (critical) -- remaining budget is at or below 0%.
+
+To override the defaults, specify your own thresholds:
 
 ```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
-metadata:
-  name: slo-alerts
-  labels:
-    release: prometheus
-spec:
-  groups:
-  - name: slo.alerts
-    rules:
-    - alert: SLOObjectiveAtRisk
-      expr: optimization_request_objective_status{status="at-risk"} == 1
-      for: 5m
-      labels:
-        severity: warning
-      annotations:
-        summary: "SLO {{ $labels.service_level_objective }} is at risk"
-
-    - alert: SLOObjectiveViolated
-      expr: optimization_request_objective_status{status="violated"} == 1
-      for: 1m
-      labels:
-        severity: critical
-      annotations:
-        summary: "SLO {{ $labels.service_level_objective }} is violated"
+objectives:
+  - name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      query:
+        success: sum(rate(http_requests_total{service="payment-api", status=~"2.."}[5m]))
+        total: sum(rate(http_requests_total{service="payment-api"}[5m]))
+    alerting:
+      enabled: true
+      budgetAlerts:
+        - name: SLOBudgetWarning
+          percent: 20        # fires when remaining budget < 20%
+          severity: warning
+        - name: SLOBudgetCritical
+          percent: 5         # fires when remaining budget < 5%
+          severity: critical
 ```
+
+### Burn Rate Alerts
+
+Burn rate alerts use multi-window, multi-burn-rate detection as described in
+the [Google SRE Workbook](https://sre.google/workbook/alerting-on-slos/).
+The idea is to alert when the error budget is being consumed faster than expected,
+rather than waiting for it to run out.
+
+Each burn rate alert defines:
+
+| Field | Description |
+|-------|-------------|
+| `consumePercent` | Percentage of the total error budget that, if consumed within `consumeWindow`, should trigger an alert. |
+| `consumeWindow` | The time frame over which `consumePercent` is evaluated (e.g., `1h`). Together with `consumePercent` and the SLO window, this determines the burn rate threshold. |
+| `longWindow` | The long observation window for the `avg_over_time` subquery (e.g., `1h`). |
+| `shortWindow` | The short observation window for the `avg_over_time` subquery (e.g., `5m`). Used to confirm the long window signal is not stale. |
+
+Example configuration with two severity tiers:
+
+```yaml
+objectives:
+  - name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      query:
+        success: sum(rate(http_requests_total{service="payment-api", status=~"2.."}[5m]))
+        total: sum(rate(http_requests_total{service="payment-api"}[5m]))
+    alerting:
+      enabled: true
+      burnRateAlerts:
+        - name: HighBurnRate
+          consumePercent: 2       # 2% of budget consumed in 1h
+          consumeWindow: 1h
+          longWindow: 1h
+          shortWindow: 5m
+          severity: critical
+        - name: MediumBurnRate
+          consumePercent: 5       # 5% of budget consumed in 6h
+          consumeWindow: 6h
+          longWindow: 6h
+          shortWindow: 30m
+          severity: warning
+```
+
+The burn rate threshold is calculated as:
+
+```
+threshold = (consumePercent / 100) * (sloWindow / consumeWindow)
+```
+
+For example, with a 30-day window and `consumePercent: 2`, `consumeWindow: 1h`:
+
+```
+threshold = 0.02 * 720h / 1h = 14.4
+```
+
+If both the long-window and short-window burn rates exceed 14.4, the alert fires.
+
+### Combining Budget and Burn Rate Alerts
+
+You can use both alert types together on the same objective:
+
+```yaml
+alerting:
+  enabled: true
+  budgetAlerts:
+    - name: BudgetLow
+      percent: 10
+      severity: warning
+  burnRateAlerts:
+    - name: HighBurnRate
+      consumePercent: 2
+      consumeWindow: 1h
+      longWindow: 1h
+      shortWindow: 5m
+      severity: critical
+```
+
+Budget alerts tell you *how much* budget is left. Burn rate alerts tell you *how fast*
+it is being consumed. Using both gives you coverage for slow, sustained degradation
+(caught by budget alerts) and sudden spikes (caught by burn rate alerts).
 
 ## Limitations
 
-### Current Version (v0.1.0)
+### Current Version
 
 | Limitation | Description | Workaround |
 |------------|-------------|------------|
-| **Percentage-based SLI only** | SLI query must return a value between 0-100 | Structure your query to return a percentage |
 | **Manual PromQL required** | No query templates or builders | Write PromQL directly in the spec |
 | **Instant queries only** | Uses Prometheus instant query, not range query | Ensure your query uses `rate()` or similar functions |
 | **No multi-cluster support** | One operator per cluster | Deploy SLOK in each cluster |
-| **No built-in alerting** | Operator doesn't send alerts directly | Use PrometheusRule for alerting (see example above) |
 | **Fixed reconciliation interval** | SLOs are re-evaluated every 1 minute | Cannot be configured per-SLO |
+| **Prometheus Operator required for alerts** | PrometheusRule generation requires the Prometheus Operator CRDs | Install the Prometheus Operator or disable `alerting.enabled` |
 
 ### Query Requirements
 
-Your SLI query **must**:
-- Return a single scalar value (not a vector)
-- Return a percentage (0-100 scale)
+The SLI is defined as a ratio of two PromQL queries: `success` (numerator) and `total` (denominator). The operator computes `(success / total) * 100` to get the actual percentage.
+
+Each query **must**:
+- Return a single instant vector value (use `sum()` to aggregate)
 - Use appropriate time functions (`rate()`, `increase()`) for counters
 
-**Good query:**
-```promql
-(sum(rate(http_requests_total{status=~"2.."}[5m]))
- / sum(rate(http_requests_total[5m]))) * 100
+**Good queries:**
+```yaml
+sli:
+  query:
+    success: sum(rate(http_requests_total{status=~"2.."}[5m]))
+    total: sum(rate(http_requests_total[5m]))
 ```
 
-**Bad query** (returns vector, not scalar):
-```promql
-rate(http_requests_total{status=~"2.."}[5m])
+**Bad query** (returns a multi-element vector):
+```yaml
+sli:
+  query:
+    success: rate(http_requests_total{status=~"2.."}[5m])
+    total: rate(http_requests_total[5m])
 ```
 
 ### Error Budget Calculation
@@ -279,7 +369,7 @@ remaining = allowed_errors - consumed
 
 Example for a 99.9% target over 30 days:
 - Allowed downtime: 0.1% of 30 days = 43.2 minutes
-- If actual is 99.87%, you've consumed ~30% of your budget
+- If actual is 99.87%, you've consumed roughly 30% of your budget
 
 ## Development
 
