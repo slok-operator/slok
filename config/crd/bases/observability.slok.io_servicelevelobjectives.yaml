@@ -58,36 +58,21 @@ spec:
                       minLength: 1
                       type: string
                     sli:
-                      description: |-
-                        EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-                        NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
                       properties:
-                        operator:
-                          description: |-
-                            Operator for threshold comparison (only used when type=threshold)
-                            Determines how actual value is compared to target
-                          enum:
-                          - <
-                          - '>'
-                          - <=
-                          - '>='
-                          type: string
                         query:
                           description: PromQL query that returns the SLI value
-                          type: string
-                        type:
-                          default: percentage
-                          description: Type of SLI measurement
-                          enum:
-                          - percentage
-                          - threshold
-                          type: string
+                          properties:
+                            success:
+                              type: string
+                            total:
+                              type: string
+                          required:
+                          - success
+                          - total
+                          type: object
                       required:
                       - query
                       type: object
-                      x-kubernetes-validations:
-                      - message: operator is required when type is threshold
-                        rule: self.type != 'threshold' || has(self.operator)
                     target:
                       description: |-
                         targetPercentage is the target percentage for the objective (e.g., 99.9).

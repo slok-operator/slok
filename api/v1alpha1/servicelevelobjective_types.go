@@ -22,22 +22,13 @@ import (
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-// +kubebuilder:validation:XValidation:rule="self.type != 'threshold' || has(self.operator)",message="operator is required when type is threshold"
+type Query struct {
+	Success string `json:"success"`
+	Total   string `json:"total"`
+}
 type SLI struct {
-	// Type of SLI measurement
-	// +kubebuilder:validation:Enum=percentage;threshold
-	// +kubebuilder:default=percentage
-	// +optional
-	Type string `json:"type,omitempty"`
-
 	// PromQL query that returns the SLI value
-	Query string `json:"query"`
-
-	// Operator for threshold comparison (only used when type=threshold)
-	// Determines how actual value is compared to target
-	// +kubebuilder:validation:Enum=<;>;<=;>=
-	// +optional
-	Operator string `json:"operator,omitempty"`
+	Query Query `json:"query"`
 }
 type Objective struct {
 	// name is the unique name of the objective within the Service Level Objective.
