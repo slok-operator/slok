@@ -54,7 +54,7 @@ func (m *MockPrometheusClient) QuerySLI(ctx context.Context, query string) (floa
 	if val, ok := m.SLIValues[query]; ok {
 		return val, nil
 	}
-	return 99.9, nil // Default value
+	return 0, fmt.Errorf("no mock value for query: %s", query)
 }
 
 func (m *MockPrometheusClient) CheckConnection(ctx context.Context) error {
@@ -98,7 +98,10 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 								Target: 99.9,
 								Window: "30d",
 								Sli: observabilityv1alpha1.SLI{
-									Query: "sum(rate(http_requests_total{code=~\"2..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+									Query: observabilityv1alpha1.Query{
+										Success: "sum(rate(http_requests_total{code=~\"2..\"}[5m]))",
+										Total:   "sum(rate(http_requests_total[5m]))",
+									},
 								},
 							},
 						},
@@ -118,8 +121,10 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 		})
 
 		It("should successfully reconcile the resource with met status", func() {
-			By("Setting up mock to return SLI value above target")
-			mockPrometheus.SLIValues["sum(rate(http_requests_total{code=~\"2..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100"] = 99.95
+			By("Setting up mock to return SLI values producing actual above target")
+			// success=9995, total=10000 → actual = (9995/10000)*100 = 99.95
+			mockPrometheus.SLIValues["sum(rate(http_requests_total{code=~\"2..\"}[5m]))"] = 9995
+			mockPrometheus.SLIValues["sum(rate(http_requests_total[5m]))"] = 10000
 
 			By("Reconciling the created resource")
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
@@ -142,13 +147,15 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			Expect(updatedSLO.Status.Objectives[0].Actual).To(Equal(99.95))
 
 			By("Verifying Prometheus was called")
-			Expect(mockPrometheus.QueryCallCount).To(Equal(1))
+			Expect(mockPrometheus.QueryCallCount).To(Equal(2))
 			Expect(mockPrometheus.ConnectCallCount).To(Equal(1))
 		})
 
 		It("should set violated status when SLI is below target", func() {
-			By("Setting up mock to return SLI value below target")
-			mockPrometheus.SLIValues["sum(rate(http_requests_total{code=~\"2..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100"] = 99.5
+			By("Setting up mock to return SLI values producing actual below target")
+			// success=995, total=1000 → actual = (995/1000)*100 = 99.5
+			mockPrometheus.SLIValues["sum(rate(http_requests_total{code=~\"2..\"}[5m]))"] = 995
+			mockPrometheus.SLIValues["sum(rate(http_requests_total[5m]))"] = 1000
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -167,11 +174,10 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 		})
 
 		It("should set at-risk status when error budget is low", func() {
-			By("Setting up mock to return SLI value that leaves < 10% error budget")
-			// Target is 99.9%, so error budget is 0.1%
-			// If actual is 99.91%, consumed is 0.09%, remaining is 0.01% = 10% of budget
-			// To get < 10% remaining, actual needs to be slightly below 99.91%
-			mockPrometheus.SLIValues["sum(rate(http_requests_total{code=~\"2..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100"] = 99.905
+			By("Setting up mock to return SLI values that leave < 10% error budget")
+			// success=99905, total=100000 → actual = (99905/100000)*100 = 99.905
+			mockPrometheus.SLIValues["sum(rate(http_requests_total{code=~\"2..\"}[5m]))"] = 99905
+			mockPrometheus.SLIValues["sum(rate(http_requests_total[5m]))"] = 100000
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -190,8 +196,8 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 		})
 
 		It("should handle Prometheus query errors gracefully", func() {
-			By("Setting up mock to return error for query")
-			mockPrometheus.SLIErrors["sum(rate(http_requests_total{code=~\"2..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100"] = fmt.Errorf("prometheus unavailable")
+			By("Setting up mock to return error for success query")
+			mockPrometheus.SLIErrors["sum(rate(http_requests_total{code=~\"2..\"}[5m]))"] = fmt.Errorf("prometheus unavailable")
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -272,7 +278,10 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 								Target: 99.9,
 								Window: "30d",
 								Sli: observabilityv1alpha1.SLI{
-									Query: "availability_query",
+									Query: observabilityv1alpha1.Query{
+										Success: "availability_success_query",
+										Total:   "availability_total_query",
+									},
 								},
 							},
 							{
@@ -280,7 +289,10 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 								Target: 95.0,
 								Window: "7d",
 								Sli: observabilityv1alpha1.SLI{
-									Query: "latency_query",
+									Query: observabilityv1alpha1.Query{
+										Success: "latency_success_query",
+										Total:   "latency_total_query",
+									},
 								},
 							},
 						},
@@ -301,8 +313,12 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 
 		It("should reconcile all objectives independently", func() {
 			mockPrometheus := NewMockPrometheusClient()
-			mockPrometheus.SLIValues["availability_query"] = 99.95 // met
-			mockPrometheus.SLIValues["latency_query"] = 90.0       // violated
+			// availability: success=9995, total=10000 → actual = 99.95 → met
+			mockPrometheus.SLIValues["availability_success_query"] = 9995
+			mockPrometheus.SLIValues["availability_total_query"] = 10000
+			// latency: success=900, total=1000 → actual = 90.0 → violated
+			mockPrometheus.SLIValues["latency_success_query"] = 900
+			mockPrometheus.SLIValues["latency_total_query"] = 1000
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -336,8 +352,8 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			Expect(latencyStatus).NotTo(BeNil())
 			Expect(latencyStatus.Status).To(Equal("violated"))
 
-			By("Verifying both queries were made")
-			Expect(mockPrometheus.QueryCallCount).To(Equal(2))
+			By("Verifying all queries were made (2 per objective)")
+			Expect(mockPrometheus.QueryCallCount).To(Equal(4))
 		})
 	})
 })

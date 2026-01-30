@@ -91,7 +91,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 	for _, obj := range slo.Spec.Objectives {
 		logger.Info("Objective", "name", obj.Name, "target", obj.Target, "window", obj.Window, "sli_query", obj.Sli.Query)
 		// Validate SLI query window vs objective window
-		sliValue, err := r.PrometheusClient.QuerySLI(ctx, obj.Sli.Query)
+		sliSuccessValue, err := r.PrometheusClient.QuerySLI(ctx, obj.Sli.Query.Success)
 		if err != nil {
 			logger.Error(err, "unable to query SLI", "sli_query", obj.Sli.Query)
 			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
@@ -108,10 +108,25 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			})
 			continue
 		}
-		// Determine status
-		logger.Info("SLI value", "objective_name", obj.Name, "sli_value", sliValue)
+		sliTotalValue, err := r.PrometheusClient.QuerySLI(ctx, obj.Sli.Query.Total)
+		if err != nil {
+			logger.Error(err, "unable to query SLI total", "sli_query", obj.Sli.Query)
+			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
+				Name:   obj.Name,
+				Target: obj.Target,
+				Status: "unknown",
+				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+					Total:            "unknown",
+					Consumed:         "unknown",
+					Remaining:        "unknown",
+					PercentRemaining: 0,
+				},
+				LastQueried: metav1.Now(),
+			})
+			continue
+		}
 
-		budget, err := errorbudget.Calculate(obj, sliValue)
+		budget, sliValue, err := errorbudget.Calculate(obj, sliSuccessValue, sliTotalValue)
 		if err != nil {
 			logger.Error(err, "unable to calculate error budget", "objective_name", obj.Name)
 			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
