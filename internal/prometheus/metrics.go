@@ -26,6 +26,7 @@ const (
 	LabelNamespace             = "namespace"
 	LabelServiceLevelObjective = "service_level_objective"
 	LabelObjectiveName         = "objective_name"
+	LabelObjectiveId           = "objective_id"
 	LabelStatus                = "status"
 )
 
@@ -35,18 +36,34 @@ var (
 	// ObjectiveStatus indicates whether the SLO objective is met (1) or not (0)
 	ObjectiveStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "optimization_request_objective_status",
-			Help: "Status of the optimization request objective (1 = met, 0 = not met)",
+			Name: "slok_slo_objective_status",
+			Help: "Status of the SLO objective (1 = met, 0 = not met)",
 		},
-		[]string{LabelNamespace, LabelServiceLevelObjective, LabelObjectiveName, LabelStatus},
+		[]string{LabelNamespace, LabelServiceLevelObjective, LabelObjectiveName, LabelStatus, LabelObjectiveId},
 	)
 
 	ObjectivePercentRemaining = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "optimization_request_objective_percent_remaining",
-			Help: "Percentage of error budget remaining for the optimization request objective",
+			Name: "slok_slo_objective_percent_remaining",
+			Help: "Percentage of error budget remaining for the SLOss objective",
 		},
-		[]string{LabelNamespace, LabelServiceLevelObjective, LabelObjectiveName},
+		[]string{LabelNamespace, LabelServiceLevelObjective, LabelObjectiveName, LabelObjectiveId},
+	)
+
+	ObjectiveTarget = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "slok_slo_objective_target",
+			Help: "Target value for the SLO objective",
+		},
+		[]string{LabelNamespace, LabelServiceLevelObjective, LabelObjectiveName, LabelObjectiveId},
+	)
+
+	ObjectiveActual = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "slok_slo_objective_actual",
+			Help: "Actual value for the SLO objective",
+		},
+		[]string{LabelNamespace, LabelServiceLevelObjective, LabelObjectiveName, LabelObjectiveId},
 	)
 )
 
@@ -56,5 +73,7 @@ func init() {
 		// Slo metrics
 		ObjectiveStatus,
 		ObjectivePercentRemaining,
+		ObjectiveTarget,
+		ObjectiveActual,
 	)
 }

@@ -158,10 +158,23 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			})
 			continue
 		}
+		prometheus.ObjectiveActual.WithLabelValues(
+			slo.Namespace,
+			slo.Name,
+			obj.Name,
+			fmt.Sprintf("%s/%s", slo.Name, obj.Name),
+		).Set(sliValue)
+		prometheus.ObjectiveTarget.WithLabelValues(
+			slo.Namespace,
+			slo.Name,
+			obj.Name,
+			fmt.Sprintf("%s/%s", slo.Name, obj.Name),
+		).Set(obj.Target)
 		prometheus.ObjectivePercentRemaining.WithLabelValues(
 			slo.Namespace,
 			slo.Name,
 			obj.Name,
+			fmt.Sprintf("%s/%s", slo.Name, obj.Name),
 		).Set(budget.PercentRemaining)
 		status := errorbudget.DetermineStatus(obj.Target, sliValue, budget.PercentRemaining)
 		prometheus.ObjectiveStatus.DeleteLabelValues(
@@ -169,12 +182,14 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			slo.Name,
 			obj.Name,
 			status,
+			fmt.Sprintf("%s/%s", slo.Name, obj.Name),
 		)
 		prometheus.ObjectiveStatus.WithLabelValues(
 			slo.Namespace,
 			slo.Name,
 			obj.Name,
 			status,
+			fmt.Sprintf("%s/%s", slo.Name, obj.Name),
 		).Set(1)
 
 		var burnRate *burnrate.BurnRate
