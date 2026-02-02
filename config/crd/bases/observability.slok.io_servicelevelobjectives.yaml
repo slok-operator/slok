@@ -332,19 +332,10 @@ spec:
                           description: shortBurnRate is the burn rate computed over
                             the short observation window.
                           type: number
-                        status:
-                          description: status indicates whether the burn rate is within
-                            acceptable limits.
-                          enum:
-                          - true
-                          - false
-                          - unknown
-                          type: string
                       required:
                       - burnRateThreshold
                       - longBurnRate
                       - shortBurnRate
-                      - status
                       type: object
                     errorBudget:
                       description: errorBudget contains details about error budget
