@@ -54,16 +54,16 @@ func (c *Client) QuerySLI(ctx context.Context, query string) (float64, error) {
 	}
 	value := float64(vectorResult[0].Value)
 	// Normalize value to 0-100 scale
-	if value >= 0 && value <= 1 {
-		value = value * 100
-	}
-	// Ensure value is in valid range
-	if value < 0 {
-		value = 0
-	}
-	if value > 100 {
-		value = 100
-	}
+	// if value >= 0 && value <= 1 {
+	// 	value = value * 100
+	// }
+	// // Ensure value is in valid range
+	// if value < 0 {
+	// 	value = 0
+	// }
+	// if value > 100 {
+	// 	value = 100
+	// }
 	return value, nil
 }
 
