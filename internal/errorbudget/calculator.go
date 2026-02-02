@@ -58,7 +58,7 @@ func calculatePercentage(target float64, sliSuccessValue float64, sliTotalValue 
 		Consumed:         fmt.Sprintf("%.1fm", consumedErrorSeconds/60.0),
 		Remaining:        fmt.Sprintf("%.1fm", remainingErrorSeconds/60.0),
 		PercentRemaining: math.Round(percentRemaining*100) / 100,
-	}, actual, nil
+	}, math.Round(actual*100) / 100, nil
 }
 
 func Calculate(obj observabilityv1alpha1.Objective, sliSuccessValue float64, sliTotalValue float64) (*Budget, float64, error) {
