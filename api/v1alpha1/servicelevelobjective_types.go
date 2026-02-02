@@ -110,6 +110,21 @@ type SLI struct {
 	Query Query `json:"query"`
 }
 
+// Possible values for ObjectiveStatus.Status.
+const (
+	// ObjectiveConditionMet indicates the objective target is being met.
+	ObjectiveConditionMet = "met"
+
+	// ObjectiveConditionAtRisk indicates the error budget is running low.
+	ObjectiveConditionAtRisk = "at-risk"
+
+	// ObjectiveConditionViolated indicates the objective target has been breached.
+	ObjectiveConditionViolated = "violated"
+
+	// ObjectiveConditionUnknown indicates the objective state could not be determined.
+	ObjectiveConditionUnknown = "unknown"
+)
+
 // Objective represents a single measurable target within a ServiceLevelObjective.
 type Objective struct {
 	// name is the unique name of the objective within the Service Level Objective.
@@ -181,10 +196,6 @@ type BurnRateStatus struct {
 
 	// burnRateThreshold is the computed threshold above which the burn rate is considered excessive.
 	BurnRateThreshold float64 `json:"burnRateThreshold"`
-
-	// status indicates whether the burn rate is within acceptable limits.
-	// +kubebuilder:validation:Enum=true;false;unknown
-	Status string `json:"status"`
 }
 
 // ObjectiveStatus represents the observed state of a single objective.

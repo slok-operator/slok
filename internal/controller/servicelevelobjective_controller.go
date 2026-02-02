@@ -111,7 +111,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
 				Name:   obj.Name,
 				Target: obj.Target,
-				Status: "unknown",
+				Status: observabilityv1alpha1.ObjectiveConditionUnknown,
 				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
 					Total:            "unknown",
 					Consumed:         "unknown",
@@ -128,7 +128,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
 				Name:   obj.Name,
 				Target: obj.Target,
-				Status: "unknown",
+				Status: observabilityv1alpha1.ObjectiveConditionUnknown,
 				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
 					Total:            "unknown",
 					Consumed:         "unknown",
@@ -147,7 +147,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 				Name:   obj.Name,
 				Target: obj.Target,
 				Actual: sliValue,
-				Status: "unknown",
+				Status: observabilityv1alpha1.ObjectiveConditionUnknown,
 				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
 					Total:            "unknown",
 					Consumed:         "unknown",
@@ -210,7 +210,6 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 					LongBurnRate:      burnRate.LongBurnRate,
 					ShortBurnRate:     burnRate.ShortBurnRate,
 					BurnRateThreshold: burnRate.BurnRateThreshold,
-					Status:            burnRate.Status,
 				},
 				LastQueried: metav1.Now(),
 			})
@@ -219,7 +218,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 				Name:   obj.Name,
 				Target: obj.Target,
 				Actual: math.Round(sliValue*100) / 100,
-				Status: "unknown",
+				Status: observabilityv1alpha1.ObjectiveConditionUnknown,
 				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
 					Total:            "unknown",
 					Consumed:         "unknown",
@@ -230,7 +229,6 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 					LongBurnRate:      0,
 					ShortBurnRate:     0,
 					BurnRateThreshold: 0,
-					Status:            "unknown",
 				},
 				LastQueried: metav1.Now(),
 			})

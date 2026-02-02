@@ -96,12 +96,12 @@ func parseWindow(window string) (time.Duration, error) {
 
 func DetermineStatus(target float64, actual float64, budgetPercente float64) string {
 	if actual < target {
-		return "violated"
+		return observabilityv1alpha1.ObjectiveConditionViolated
 	}
 
 	if budgetPercente < 10.0 && budgetPercente >= 0.0 {
-		return "at-risk"
+		return observabilityv1alpha1.ObjectiveConditionAtRisk
 	}
 
-	return "met"
+	return observabilityv1alpha1.ObjectiveConditionMet
 }
