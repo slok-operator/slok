@@ -57,18 +57,18 @@ func CreatePrometheusRule(sloName string, sloNamespace string, objective observa
 			Expr:  intstr.FromString(fmt.Sprintf("optimization_request_objective_percent_remaining{namespace=\"%s\", service_level_objective=\"%s\", objective_name=\"%s\"} > 0 and optimization_request_objective_percent_remaining{namespace=\"%s\", service_level_objective=\"%s\", objective_name=\"%s\"} < 10", sloNamespace, sloName, objectiveName, sloNamespace, sloName, objectiveName)),
 			For:   monitoringv1.DurationPointer("3m"),
 			Labels: map[string]string{
-					"severity": "warning",
-				},
-			})
+				"severity": "warning",
+			},
+		})
 		prometheusRule.Spec.Groups[0].Rules = append(prometheusRule.Spec.Groups[0].Rules, monitoringv1.Rule{
-				Alert: "SLOObjectiveViolatedWarning",
-				Expr:  intstr.FromString(fmt.Sprintf("optimization_request_objective_percent_remaining{namespace=\"%s\", service_level_objective=\"%s\", objective_name=\"%s\"} <= 0", sloNamespace, sloName, objectiveName)),
-				For:   monitoringv1.DurationPointer("5m"),
-				Labels: map[string]string{
-					"severity": "warning",
-				},
-			})
-		
+			Alert: "SLOObjectiveViolatedWarning",
+			Expr:  intstr.FromString(fmt.Sprintf("optimization_request_objective_percent_remaining{namespace=\"%s\", service_level_objective=\"%s\", objective_name=\"%s\"} <= 0", sloNamespace, sloName, objectiveName)),
+			For:   monitoringv1.DurationPointer("5m"),
+			Labels: map[string]string{
+				"severity": "warning",
+			},
+		})
+
 		// Custom budget alerts from the SLO spec
 		for _, threshold := range objective.Alerting.BudgetErrorAlerts.Alerts {
 			prometheusRule.Spec.Groups[0].Rules = append(prometheusRule.Spec.Groups[0].Rules, monitoringv1.Rule{
