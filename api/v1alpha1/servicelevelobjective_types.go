@@ -19,12 +19,24 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+type BudgetAlert struct {
+	// name is the unique identifier for this budget alert.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Name string `json:"name"`
 
-// BurnRateAlert defines a burn rate alerting rule.
-// It determines how fast the error budget is being consumed
-// and triggers alerts when the burn rate exceeds the threshold.
+	// percent is the error budget remaining threshold below which the alert fires (e.g., 10.0 means < 10%).
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	// +required
+	Percent float64 `json:"percent"`
+
+	// severity is the alert severity level (e.g., "critical", "warning").
+	// +kubebuilder:validation:Enum=critical;warning;info
+	// +required
+	Severity string `json:"severity"`
+}
 type BurnRateAlert struct {
-	// name is the unique identifier for this burn rate alert.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	Name string `json:"name"`
@@ -55,41 +67,37 @@ type BurnRateAlert struct {
 	// +required
 	Severity string `json:"severity"`
 }
+// BurnRateAlert defines a burn rate alerting rule.
+// It determines how fast the error budget is being consumed
+// and triggers alerts when the burn rate exceeds the threshold.
+type BurnRates struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// name is the unique identifier for this burn rate alert.
+	// +optional
+	Alerts []BurnRateAlert `json:"alerts,omitempty"`
+}
 
 // BudgetAlert defines an error budget threshold alerting rule.
 // It triggers an alert when the remaining error budget drops below the specified percentage.
-type BudgetAlert struct {
-	// name is the unique identifier for this budget alert.
-	// +kubebuilder:validation:MinLength=1
-	// +required
-	Name string `json:"name"`
+type BudgetErrors struct {
+	Enabled bool `json:"enabled,omitempty"`
 
-	// percent is the error budget remaining threshold below which the alert fires (e.g., 10.0 means < 10%).
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=100
-	// +required
-	Percent float64 `json:"percent"`
-
-	// severity is the alert severity level (e.g., "critical", "warning").
-	// +kubebuilder:validation:Enum=critical;warning;info
-	// +required
-	Severity string `json:"severity"`
+	// alerts is a list of budget alerting rules.
+	// Each alert specifies a threshold percentage and severity level.
+	// +optional
+	Alerts []BudgetAlert `json:"alerts,omitempty"`
 }
 
 // Alerting configures the alerting behaviour for an objective.
 // When enabled, PrometheusRule resources are created for budget and/or burn rate alerts.
 type Alerting struct {
-	// enabled controls whether PrometheusRule resources are generated for this objective.
-	// +required
-	Enabled bool `json:"enabled"`
-
 	// budgetAlerts is a list of error budget threshold alerts.
 	// +optional
-	BudgetAlerts []BudgetAlert `json:"budgetAlerts,omitempty"`
+	BudgetErrorAlerts BudgetErrors `json:"budgetErrorAlerts,omitempty"`
 
 	// burnRateAlerts is a list of burn rate alerting rules.
 	// +optional
-	BurnRateAlerts []BurnRateAlert `json:"burnRateAlerts,omitempty"`
+	BurnRateAlerts BurnRates `json:"burnRateAlerts,omitempty"`
 }
 
 // Query holds the PromQL queries used to compute the SLI ratio (success / total).
@@ -140,8 +148,7 @@ type Objective struct {
 	Target float64 `json:"target"`
 
 	// window is the time window over which the objective is measured (e.g., "30d" for 30 days).
-	// +kubebuilder:validation:Pattern=`^(\d+d|\d+h|\d+m|\d+s)$`
-	// +required
+	// +optional
 	Window string `json:"window"`
 
 	// sli defines the Service Level Indicator used to measure this objective.
@@ -151,10 +158,6 @@ type Objective struct {
 	// alerting configures alerting rules (budget and burn rate) for this objective.
 	// +optional
 	Alerting Alerting `json:"alerting,omitempty"`
-
-	// budgetAlert is a single legacy budget alert configuration.
-	// +optional
-	BudgetAlert BudgetAlert `json:"budgetAlert,omitempty"`
 }
 
 // ServiceLevelObjectiveSpec defines the desired state of a ServiceLevelObjective.
@@ -194,8 +197,11 @@ type BurnRateStatus struct {
 	// shortBurnRate is the burn rate computed over the short observation window.
 	ShortBurnRate float64 `json:"shortBurnRate"`
 
-	// burnRateThreshold is the computed threshold above which the burn rate is considered excessive.
-	BurnRateThreshold float64 `json:"burnRateThreshold"`
+	// longWindow is the duration of the long observation window (e.g., "1h").
+	LongWindow string `json:"longWindow"`
+
+	// shortWindow is the duration of the short observation window (e.g., "5m").
+	ShortWindow string `json:"shortWindow"`
 }
 
 // ObjectiveStatus represents the observed state of a single objective.
@@ -218,7 +224,7 @@ type ObjectiveStatus struct {
 
 	// burnRate contains the observed burn rate metrics.
 	// +optional
-	BurnRate BurnRateStatus `json:"burnRate,omitempty"`
+	BurnRate []BurnRateStatus `json:"burnRate,omitempty"`
 
 	// lastQueried is the timestamp of the last Prometheus query for this objective.
 	// +optional
