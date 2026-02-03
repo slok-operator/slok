@@ -2,6 +2,7 @@ package burnrate
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
@@ -12,27 +13,28 @@ type BurnRate struct {
 
 	ShortBurnRate float64
 
-	BurnRateThreshold float64
+	LongWindow string
+
+	ShortWindow string
 
 	Status string
 }
 
-func Calculate(obj observabilityv1alpha1.Objective, sliErrBurnRateShort float64, sliErrBurnRateLong float64) (*BurnRate, error) {
-	burnShortRate := (1 - sliErrBurnRateShort) / (1 - obj.Target/100)
-	burnLongRate := (1 - sliErrBurnRateLong) / (1 - obj.Target/100)
-	sloWindowduration, err := parseWindow(obj.Window)
-	if err != nil {
-		return &BurnRate{}, err
-	}
-	burnRateWindow, err := parseWindow(obj.Alerting.BurnRateAlerts[0].ConsumeWindow)
-	if err != nil {
-		return &BurnRate{}, err
-	}
-	burnRateThreshold := (obj.Alerting.BurnRateAlerts[0].ConsumePercent / 100) * float64(sloWindowduration.Hours()) / float64(burnRateWindow.Hours())
-	return &BurnRate{
+func Calculate(obj observabilityv1alpha1.Objective, sliShortWindow float64, sliLongWindow float64) (BurnRate, error) {
+	burnShortRate := math.Round(((1-sliShortWindow)/(1-obj.Target/100))*100) / 100
+	burnLongRate := math.Round(((1-sliLongWindow)/(1-obj.Target/100))*100) / 100
+	//sloWindowduration, err := parseWindow(obj.Window)
+	// if err != nil {
+	// 	return BurnRate{}, err
+	// }
+	// //burnRateWindow, err := parseWindow(obj.Alerting.BurnRateAlerts[0].Window)
+	// if err != nil {
+	// 	return BurnRate{}, err
+	// }
+	//burnRateThreshold := (obj.Alerting.BurnRateAlerts[0].ConsumePercent / 100) * float64(sloWindowduration.Hours()) / float64(burnRateWindow.Hours())
+	return BurnRate{
 		LongBurnRate:      burnLongRate,
 		ShortBurnRate:     burnShortRate,
-		BurnRateThreshold: burnRateThreshold,
 		Status:            "true",
 	}, nil
 }
