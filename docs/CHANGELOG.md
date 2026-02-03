@@ -4,6 +4,48 @@ All notable changes to the SLOK project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v0.2.0] - 2026-02-03
+
+### Added
+
+#### `$window` Placeholder in SLI Queries
+- The controller now resolves `$window` in SLI `success` and `total` queries, replacing it with the objective's `window` value (e.g., `7d`, `30d`)
+- Burn rate queries also resolve `$window` per preset window (short/long)
+- Users can write queries like `sum(increase(http_requests_total[$window]))` without hardcoding the window
+
+#### Multi-Window Burn Rate Calculation
+- Added 4 default burn rate presets based on the Google SRE Workbook:
+  - 5m/1h (>14x, outage)
+  - 1h/6h (>6x, high burn)
+  - 6h/3d (>1x, erosion)
+  - 7d/30d (>0.5x, slow burn)
+- Burn rate values rounded to 2 decimal places
+- Each objective now reports burn rate metrics for all presets in its status
+
+#### PrometheusRule Generation
+- Automatic generation of PrometheusRule resources for burn rate alerts when `burnRateAlerts.enabled: true`
+- Each preset generates a dual-condition expression: `(1 - (success/total)) / (1 - (target/100)) > burnRate` for both long and short windows
+- Alert names: `SLOBurnRateOutage` (critical), `SLOBurnRateHigh` (critical), `SLOBurnRateErosion` (warning), `SLOBurnRateSlow` (warning)
+- Budget error alerts with default `SLOObjectiveAtRisk` and `SLOObjectiveViolated` rules when `budgetErrorAlerts.enabled: true`
+- Support for custom budget threshold alerts via `budgetErrorAlerts.alerts`
+
+#### Prometheus Metrics
+- Added `slo_objective_status` gauge metric with status label
+
+### Changed
+
+#### CRD Structure
+- `Alerting` now uses separate `budgetErrorAlerts` and `burnRateAlerts` sections, each with its own `enabled` flag
+- `BurnRateStatus` in `ObjectiveStatus` changed from single struct to `[]BurnRateStatus` array (one entry per burn rate preset)
+- `BurnRateStatus` fields updated: removed `burnRateThreshold` and `status`, added `longWindow` and `shortWindow`
+
+#### SLI Queries
+- Switched recommended query pattern from `rate(...[5m])` to `increase(...[$window])` for proper rolling-window error budget tracking
+- Error budget now reflects accumulated errors over the full window and recovers only when errors exit the trailing edge
+
+#### Error Budget
+- `DetermineStatus` function moved to `errorbudget` package (also available in `burnrate` package)
+
 ## [v0.1.0] - 2026-01-30
 
 ### Added
