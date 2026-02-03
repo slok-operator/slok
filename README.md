@@ -27,8 +27,8 @@ spec:
       window: 7d
       sli:
         query:
-          success: sum(rate(http_requests_total{status=~"2.."}[5m]))
-          total: sum(rate(http_requests_total[5m]))
+          success: sum(increase(http_requests_total{status=~"2.."}[7d]))
+          total: sum(increase(http_requests_total[7d]))
 EOF
 
 # 3. Check the status
@@ -118,8 +118,8 @@ spec:
       window: 30d         # Over a 30-day rolling window
       sli:
         query:
-          success: sum(rate(http_requests_total{service="payment-api", status=~"2.."}[5m]))
-          total: sum(rate(http_requests_total{service="payment-api"}[5m]))
+          success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[30d]))
+          total: sum(increase(http_requests_total{service="payment-api"}[30d]))
 ```
 
 ### Latency SLO
@@ -139,8 +139,8 @@ spec:
       window: 7d
       sli:
         query:
-          success: sum(rate(http_request_duration_seconds_bucket{service="checkout", le="0.5"}[5m]))
-          total: sum(rate(http_request_duration_seconds_count{service="checkout"}[5m]))
+          success: sum(increase(http_request_duration_seconds_bucket{service="checkout", le="0.5"}[7d]))
+          total: sum(increase(http_request_duration_seconds_count{service="checkout"}[7d]))
 ```
 
 ### Multiple Objectives
@@ -160,16 +160,16 @@ spec:
       window: 30d
       sli:
         query:
-          success: sum(rate(http_requests_total{job="api-gateway", status!~"5.."}[5m]))
-          total: sum(rate(http_requests_total{job="api-gateway"}[5m]))
+          success: sum(increase(http_requests_total{job="api-gateway", status!~"5.."}[30d]))
+          total: sum(increase(http_requests_total{job="api-gateway"}[30d]))
 
     - name: latency-p99
       target: 99.0
       window: 30d
       sli:
         query:
-          success: sum(rate(http_request_duration_seconds_bucket{job="api-gateway", le="0.3"}[5m]))
-          total: sum(rate(http_request_duration_seconds_count{job="api-gateway"}[5m]))
+          success: sum(increase(http_request_duration_seconds_bucket{job="api-gateway", le="0.3"}[30d]))
+          total: sum(increase(http_request_duration_seconds_count{job="api-gateway"}[30d]))
 ```
 
 ### Check SLO Status
@@ -185,12 +185,12 @@ status:
     - name: availability
       target: 99.9
       actual: 99.87
-      status: met           # met | at-risk | violated | unknown
+      status: violated      # met | at-risk | violated | unknown
       errorBudget:
         total: "43.2m"
-        consumed: "10.5m"
-        remaining: "32.7m"
-        percentRemaining: 75.69
+        consumed: "56.2m"
+        remaining: "0.0m"
+        percentRemaining: 0.0
       burnRate:
         longBurnRate: 0.5
         shortBurnRate: 0.48
@@ -227,8 +227,8 @@ objectives:
     window: 30d
     sli:
       query:
-        success: sum(rate(http_requests_total{service="payment-api", status=~"2.."}[5m]))
-        total: sum(rate(http_requests_total{service="payment-api"}[5m]))
+        success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[30d]))
+        total: sum(increase(http_requests_total{service="payment-api"}[30d]))
     alerting:
       enabled: true
       budgetAlerts:
@@ -265,8 +265,8 @@ objectives:
     window: 30d
     sli:
       query:
-        success: sum(rate(http_requests_total{service="payment-api", status=~"2.."}[5m]))
-        total: sum(rate(http_requests_total{service="payment-api"}[5m]))
+        success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[30d]))
+        total: sum(increase(http_requests_total{service="payment-api"}[30d]))
     alerting:
       enabled: true
       burnRateAlerts:
@@ -340,9 +340,32 @@ The SLI is defined as a ratio of two PromQL queries: `success` (numerator) and `
 
 Each query **must**:
 - Return a single instant vector value (use `sum()` to aggregate)
-- Use appropriate time functions (`rate()`, `increase()`) for counters
+- Use `increase(...[window])` where `window` matches the SLO window (e.g., `7d`, `30d`)
+
+Use `increase()` instead of `rate()` so that the error budget reflects accumulated errors
+over the entire rolling window. With `rate()`, the error budget would only reflect the
+last few minutes and would recover instantly once errors stop. With `increase()`, errors
+are tracked over the full window and only "fall off" when they exit the trailing edge
+(e.g., after 7 days for a 7-day window).
 
 **Good queries:**
+```yaml
+# 7-day SLO -- increase range matches the window
+sli:
+  query:
+    success: sum(increase(http_requests_total{status=~"2.."}[7d]))
+    total: sum(increase(http_requests_total[7d]))
+```
+
+**Bad query** (returns a multi-element vector):
+```yaml
+sli:
+  query:
+    success: increase(http_requests_total{status=~"2.."}[7d])
+    total: increase(http_requests_total[7d])
+```
+
+**Bad query** (instantaneous rate, no rolling window memory):
 ```yaml
 sli:
   query:
@@ -350,26 +373,29 @@ sli:
     total: sum(rate(http_requests_total[5m]))
 ```
 
-**Bad query** (returns a multi-element vector):
-```yaml
-sli:
-  query:
-    success: rate(http_requests_total{status=~"2.."}[5m])
-    total: rate(http_requests_total[5m])
-```
-
 ### Error Budget Calculation
 
-Error budget is calculated as:
+The operator calculates the error budget from the success/total ratio returned by
+the SLI queries. Because the queries use `increase(...[window])`, the ratio
+represents the actual success rate over the entire rolling window, and the error
+budget tracks real accumulated errors.
+
 ```
-allowed_errors = (100 - target) * window_in_minutes
-consumed = allowed_errors * ((target - actual) / (100 - target))
-remaining = allowed_errors - consumed
+actual            = (success / total) * 100
+error_budget      = (100 - target) * window_in_seconds
+consumed          = (100 - actual) / 100 * window_in_seconds
+remaining         = error_budget - consumed
+percent_remaining = (remaining / error_budget) * 100
 ```
 
 Example for a 99.9% target over 30 days:
-- Allowed downtime: 0.1% of 30 days = 43.2 minutes
-- If actual is 99.87%, you've consumed roughly 30% of your budget
+- Error budget: 0.1% of 30 days = 43.2 minutes
+- If actual is 99.87%, consumed = 0.13% of 30 days = 56.2 minutes
+- Remaining = 0 (budget exhausted, status: **violated**)
+
+The budget recovers only when errors exit the trailing edge of the rolling window.
+An error that occurred on Monday will stop counting against the budget the following
+Monday (for a 7-day window) or 30 days later (for a 30-day window).
 
 ## Development
 
