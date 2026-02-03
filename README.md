@@ -27,8 +27,8 @@ spec:
       window: 7d
       sli:
         query:
-          success: sum(increase(http_requests_total{status=~"2.."}[7d]))
-          total: sum(increase(http_requests_total[7d]))
+          success: sum(increase(http_requests_total{status=~"2.."}[$window]))
+          total: sum(increase(http_requests_total[$window]))
 EOF
 
 # 3. Check the status
@@ -118,8 +118,8 @@ spec:
       window: 30d         # Over a 30-day rolling window
       sli:
         query:
-          success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[30d]))
-          total: sum(increase(http_requests_total{service="payment-api"}[30d]))
+          success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[$window]))
+          total: sum(increase(http_requests_total{service="payment-api"}[$window]))
 ```
 
 ### Latency SLO
@@ -139,8 +139,8 @@ spec:
       window: 7d
       sli:
         query:
-          success: sum(increase(http_request_duration_seconds_bucket{service="checkout", le="0.5"}[7d]))
-          total: sum(increase(http_request_duration_seconds_count{service="checkout"}[7d]))
+          success: sum(increase(http_request_duration_seconds_bucket{service="checkout", le="0.5"}[$window]))
+          total: sum(increase(http_request_duration_seconds_count{service="checkout"}[$window]))
 ```
 
 ### Multiple Objectives
@@ -160,16 +160,16 @@ spec:
       window: 30d
       sli:
         query:
-          success: sum(increase(http_requests_total{job="api-gateway", status!~"5.."}[30d]))
-          total: sum(increase(http_requests_total{job="api-gateway"}[30d]))
+          success: sum(increase(http_requests_total{job="api-gateway", status!~"5.."}[$window]))
+          total: sum(increase(http_requests_total{job="api-gateway"}[$window]))
 
     - name: latency-p99
       target: 99.0
       window: 30d
       sli:
         query:
-          success: sum(increase(http_request_duration_seconds_bucket{job="api-gateway", le="0.3"}[30d]))
-          total: sum(increase(http_request_duration_seconds_count{job="api-gateway"}[30d]))
+          success: sum(increase(http_request_duration_seconds_bucket{job="api-gateway", le="0.3"}[$window]))
+          total: sum(increase(http_request_duration_seconds_count{job="api-gateway"}[$window]))
 ```
 
 ### Check SLO Status
@@ -192,10 +192,22 @@ status:
         remaining: "0.0m"
         percentRemaining: 0.0
       burnRate:
-        longBurnRate: 0.5
-        shortBurnRate: 0.48
-        burnRateThreshold: 14.4
-        status: "true"
+        - longBurnRate: 0.5
+          shortBurnRate: 0.48
+          longWindow: "1h"
+          shortWindow: "5m"
+        - longBurnRate: 0.33
+          shortBurnRate: 0.31
+          longWindow: "6h"
+          shortWindow: "1h"
+        - longBurnRate: 0.12
+          shortBurnRate: 0.1
+          longWindow: "3d"
+          shortWindow: "6h"
+        - longBurnRate: 0.06
+          shortBurnRate: 0.05
+          longWindow: "30d"
+          shortWindow: "7d"
       lastQueried: "2026-01-28T10:30:00Z"
   lastUpdateTime: "2026-01-28T10:30:00Z"
   conditions:
@@ -206,19 +218,19 @@ status:
 
 ## Alerting
 
-When `alerting.enabled` is set to `true` on an objective, SLOK automatically generates
-`PrometheusRule` resources in the same namespace as the SLO. You can configure two
-kinds of alerts: error budget alerts and burn rate alerts.
+SLOK generates `PrometheusRule` resources in the same namespace as the SLO. Each
+alert type (`budgetErrorAlerts`, `burnRateAlerts`) is independently enabled via its
+own `enabled` flag.
 
 ### Budget Alerts
 
 Budget alerts fire when the remaining error budget drops below a given percentage.
-If no custom `budgetAlerts` are provided, SLOK creates two default rules:
+When `budgetErrorAlerts.enabled` is `true`, SLOK creates two default rules:
 
 - **SLOObjectiveAtRisk** (warning) -- remaining budget is between 0% and 10%.
-- **SLOObjectiveViolated** (critical) -- remaining budget is at or below 0%.
+- **SLOObjectiveViolated** (warning) -- remaining budget is at or below 0%.
 
-To override the defaults, specify your own thresholds:
+You can also add custom thresholds via `budgetErrorAlerts.alerts`:
 
 ```yaml
 objectives:
@@ -227,17 +239,18 @@ objectives:
     window: 30d
     sli:
       query:
-        success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[30d]))
-        total: sum(increase(http_requests_total{service="payment-api"}[30d]))
+        success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[$window]))
+        total: sum(increase(http_requests_total{service="payment-api"}[$window]))
     alerting:
-      enabled: true
-      budgetAlerts:
-        - name: SLOBudgetWarning
-          percent: 20        # fires when remaining budget < 20%
-          severity: warning
-        - name: SLOBudgetCritical
-          percent: 5         # fires when remaining budget < 5%
-          severity: critical
+      budgetErrorAlerts:
+        enabled: true
+        alerts:
+          - name: SLOBudgetWarning
+            percent: 20        # fires when remaining budget < 20%
+            severity: warning
+          - name: SLOBudgetCritical
+            percent: 5         # fires when remaining budget < 5%
+            severity: critical
 ```
 
 ### Burn Rate Alerts
@@ -247,14 +260,40 @@ the [Google SRE Workbook](https://sre.google/workbook/alerting-on-slos/).
 The idea is to alert when the error budget is being consumed faster than expected,
 rather than waiting for it to run out.
 
-Each burn rate alert defines:
+#### Default Presets
+
+When `burnRateAlerts.enabled` is `true`, SLOK automatically creates four predefined
+alert rules based on the Google SRE Workbook approach:
+
+| Alert | Short Window | Long Window | Burn Rate | Severity | For | Meaning |
+|-------|-------------|-------------|-----------|----------|-----|---------|
+| `SLOBurnRateOutage` | 5m | 1h | >14x | critical | 2m | Active outage |
+| `SLOBurnRateHigh` | 1h | 6h | >6x | critical | 15m | High burn |
+| `SLOBurnRateErosion` | 6h | 3d | >1x | warning | 1h | Steady erosion |
+| `SLOBurnRateSlow` | 7d | 30d | >0.5x | warning | 3h | Slow burn |
+
+Each rule fires when **both** the long-window and short-window burn rates exceed
+the threshold. The expression generated for each preset is:
+
+```
+(1 - (success_long / total_long)) / (1 - (target / 100)) > burnRate
+AND
+(1 - (success_short / total_short)) / (1 - (target / 100)) > burnRate
+```
+
+The `$window` placeholder in the SLI queries is resolved to the preset's long/short
+window values for each rule.
+
+#### Custom Burn Rate Alerts
+
+You can also define custom burn rate alerts via `burnRateAlerts.alerts`:
 
 | Field | Description |
 |-------|-------------|
 | `consumePercent` | Percentage of the total error budget that, if consumed within `consumeWindow`, should trigger an alert. |
 | `consumeWindow` | The time frame over which `consumePercent` is evaluated (e.g., `1h`). Together with `consumePercent` and the SLO window, this determines the burn rate threshold. |
-| `longWindow` | The long observation window for the `avg_over_time` subquery (e.g., `1h`). |
-| `shortWindow` | The short observation window for the `avg_over_time` subquery (e.g., `5m`). Used to confirm the long window signal is not stale. |
+| `longWindow` | The long observation window for the burn rate subquery (e.g., `1h`). |
+| `shortWindow` | The short observation window for the burn rate subquery (e.g., `5m`). Used to confirm the long window signal is not stale. |
 
 Example configuration with two severity tiers:
 
@@ -265,23 +304,24 @@ objectives:
     window: 30d
     sli:
       query:
-        success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[30d]))
-        total: sum(increase(http_requests_total{service="payment-api"}[30d]))
+        success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[$window]))
+        total: sum(increase(http_requests_total{service="payment-api"}[$window]))
     alerting:
-      enabled: true
       burnRateAlerts:
-        - name: HighBurnRate
-          consumePercent: 2       # 2% of budget consumed in 1h
-          consumeWindow: 1h
-          longWindow: 1h
-          shortWindow: 5m
-          severity: critical
-        - name: MediumBurnRate
-          consumePercent: 5       # 5% of budget consumed in 6h
-          consumeWindow: 6h
-          longWindow: 6h
-          shortWindow: 30m
-          severity: warning
+        enabled: true
+        alerts:
+          - name: HighBurnRate
+            consumePercent: 2       # 2% of budget consumed in 1h
+            consumeWindow: 1h
+            longWindow: 1h
+            shortWindow: 5m
+            severity: critical
+          - name: MediumBurnRate
+            consumePercent: 5       # 5% of budget consumed in 6h
+            consumeWindow: 6h
+            longWindow: 6h
+            shortWindow: 30m
+            severity: warning
 ```
 
 The burn rate threshold is calculated as:
@@ -304,18 +344,21 @@ You can use both alert types together on the same objective:
 
 ```yaml
 alerting:
-  enabled: true
-  budgetAlerts:
-    - name: BudgetLow
-      percent: 10
-      severity: warning
+  budgetErrorAlerts:
+    enabled: true
+    alerts:
+      - name: BudgetLow
+        percent: 10
+        severity: warning
   burnRateAlerts:
-    - name: HighBurnRate
-      consumePercent: 2
-      consumeWindow: 1h
-      longWindow: 1h
-      shortWindow: 5m
-      severity: critical
+    enabled: true
+    alerts:
+      - name: HighBurnRate
+        consumePercent: 2
+        consumeWindow: 1h
+        longWindow: 1h
+        shortWindow: 5m
+        severity: critical
 ```
 
 Budget alerts tell you *how much* budget is left. Burn rate alerts tell you *how fast*
@@ -329,7 +372,7 @@ it is being consumed. Using both gives you coverage for slow, sustained degradat
 | Limitation | Description | Workaround |
 |------------|-------------|------------|
 | **Manual PromQL required** | No query templates or builders | Write PromQL directly in the spec |
-| **Instant queries only** | Uses Prometheus instant query, not range query | Ensure your query uses `rate()` or similar functions |
+| **Instant queries only** | Uses Prometheus instant query, not range query | Use `increase(...[window])` for rolling window SLIs |
 | **No multi-cluster support** | One operator per cluster | Deploy SLOK in each cluster |
 | **Fixed reconciliation interval** | SLOs are re-evaluated every 1 minute | Cannot be configured per-SLO |
 | **Prometheus Operator required for alerts** | PrometheusRule generation requires the Prometheus Operator CRDs | Install the Prometheus Operator or disable `alerting.enabled` |
@@ -340,7 +383,11 @@ The SLI is defined as a ratio of two PromQL queries: `success` (numerator) and `
 
 Each query **must**:
 - Return a single instant vector value (use `sum()` to aggregate)
-- Use `increase(...[window])` where `window` matches the SLO window (e.g., `7d`, `30d`)
+- Use `increase(...[$window])` so the operator resolves `$window` to the objective's window value at runtime
+
+The `$window` placeholder is automatically replaced by the controller with the objective's
+`window` field (e.g., `7d`, `30d`). This avoids duplicating the window value in the query
+and ensures burn rate queries use the correct windows for each preset.
 
 Use `increase()` instead of `rate()` so that the error budget reflects accumulated errors
 over the entire rolling window. With `rate()`, the error budget would only reflect the
@@ -348,9 +395,18 @@ last few minutes and would recover instantly once errors stop. With `increase()`
 are tracked over the full window and only "fall off" when they exit the trailing edge
 (e.g., after 7 days for a 7-day window).
 
-**Good queries:**
+**Good queries (using `$window` placeholder):**
 ```yaml
-# 7-day SLO -- increase range matches the window
+# $window is resolved to the objective window (e.g., 7d, 30d)
+sli:
+  query:
+    success: sum(increase(http_requests_total{status=~"2.."}[$window]))
+    total: sum(increase(http_requests_total[$window]))
+```
+
+**Also valid (hardcoded window):**
+```yaml
+# Hardcoded window -- works but you must keep it in sync with the window field
 sli:
   query:
     success: sum(increase(http_requests_total{status=~"2.."}[7d]))
@@ -361,8 +417,8 @@ sli:
 ```yaml
 sli:
   query:
-    success: increase(http_requests_total{status=~"2.."}[7d])
-    total: increase(http_requests_total[7d])
+    success: increase(http_requests_total{status=~"2.."}[$window])
+    total: increase(http_requests_total[$window])
 ```
 
 **Bad query** (instantaneous rate, no rolling window memory):
