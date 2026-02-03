@@ -236,10 +236,10 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		for _, br := range burnRates {
 			logger.Info("Burn rate for objective", "objective_name", obj.Name, "short_burn_rate", br.ShortBurnRate, "long_burn_rate", br.LongBurnRate)
 			burnRateStatuses = append(burnRateStatuses, observabilityv1alpha1.BurnRateStatus{
-				LongBurnRate:      br.LongBurnRate,
-				ShortBurnRate:     br.ShortBurnRate,
-				LongWindow:        br.LongWindow,
-				ShortWindow:       br.ShortWindow,
+				LongBurnRate:  br.LongBurnRate,
+				ShortBurnRate: br.ShortBurnRate,
+				LongWindow:    br.LongWindow,
+				ShortWindow:   br.ShortWindow,
 			})
 		}
 
