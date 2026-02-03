@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
 type BudgetAlert struct {
 	// name is the unique identifier for this budget alert.
 	// +kubebuilder:validation:MinLength=1
@@ -67,6 +68,7 @@ type BurnRateAlert struct {
 	// +required
 	Severity string `json:"severity"`
 }
+
 // BurnRateAlert defines a burn rate alerting rule.
 // It determines how fast the error budget is being consumed
 // and triggers alerts when the burn rate exceeds the threshold.
