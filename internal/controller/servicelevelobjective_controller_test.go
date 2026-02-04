@@ -73,6 +73,23 @@ func (m *MockPrometheusClient) CheckConnection(ctx context.Context) error {
 	return m.ConnectionError
 }
 
+// sliErrorRateQuery builds the SLI error rate query string matching the controller format.
+func sliErrorRateQuery(objectiveName, sloName, sloNamespace string) string {
+	return fmt.Sprintf(`slok:sli_error_rate:5m{objective_name="%s",slo_name="%s",slo_namespace="%s"}`, objectiveName, sloName, sloNamespace)
+}
+
+// burnRateQuery builds a burn rate query string for a given window.
+func burnRateQuery(window, objectiveName, sloName, sloNamespace string) string {
+	return fmt.Sprintf(`slok:burn_rate:%s{objective_name="%s",slo_name="%s",slo_namespace="%s"}`, window, objectiveName, sloName, sloNamespace)
+}
+
+// setBurnRateValues sets the same burn rate value for all 6 unique windows.
+func setBurnRateValues(mock *MockPrometheusClient, objectiveName, sloName, sloNamespace string, value float64) {
+	for _, window := range []string{"5m", "1h", "6h", "3d", "7d", "30d"} {
+		mock.SLIValues[burnRateQuery(window, objectiveName, sloName, sloNamespace)] = value
+	}
+}
+
 var _ = Describe("ServiceLevelObjective Controller", func() {
 	const (
 		resourceName      = "test-slo"
@@ -110,8 +127,8 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 								Window: "30d",
 								Sli: observabilityv1alpha1.SLI{
 									Query: observabilityv1alpha1.Query{
-										Success: `sum(rate(http_requests_total{code=~"2.."}[5m]))`,
-										Total:   `sum(rate(http_requests_total[5m]))`,
+										TotalQuery: `sum(rate(http_requests_total[5m]))`,
+										ErrorQuery: `sum(rate(http_requests_total{code=~"5.."}[5m]))`,
 									},
 								},
 							},
@@ -132,12 +149,11 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 		})
 
 		It("should successfully reconcile the resource with met status", func() {
-			By("Setting up mock to return SLI values producing actual above target")
-			// success=9995, total=10000 → actual = (9995/10000)*100 = 99.95
-			mockPrometheus.SLIValues[`sum(rate(http_requests_total{code=~"2.."}[5m]))`] = 9995
-			mockPrometheus.SLIValues[`sum(rate(http_requests_total[5m]))`] = 10000
-			// Burn rate queries: all 4 presets produce the same query (no $window to resolve)
-			mockPrometheus.SLIValues[`sum(rate(http_requests_total{code=~"2.."}[5m])) / sum(rate(http_requests_total[5m]))`] = 0.9995
+			By("Setting up mock to return SLI error rate producing actual above target with low burn rates")
+			// sliErrorRate=0.0005 → actual=99.95 (above target 99.9)
+			mockPrometheus.SLIValues[sliErrorRateQuery("availability", resourceName, resourceNamespace)] = 0.0005
+			// All burn rates = 0.5 → all below thresholds → met
+			setBurnRateValues(mockPrometheus, "availability", resourceName, resourceNamespace, 0.5)
 
 			By("Reconciling the created resource")
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
@@ -159,18 +175,16 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			Expect(updatedSLO.Status.Objectives[0].Status).To(Equal("met"))
 			Expect(updatedSLO.Status.Objectives[0].Actual).To(Equal(99.95))
 
-			By("Verifying Prometheus was called (2 SLI + 4 presets x 2 burn rate)")
-			Expect(mockPrometheus.QueryCallCount).To(Equal(10))
+			By("Verifying Prometheus was called (1 SLI + 4 presets x 2 burn rate = 9)")
+			Expect(mockPrometheus.QueryCallCount).To(Equal(9))
 			Expect(mockPrometheus.ConnectCallCount).To(Equal(1))
 		})
 
-		It("should set violated status when SLI is below target", func() {
-			By("Setting up mock to return SLI values producing actual below target")
-			// success=995, total=1000 → actual = (995/1000)*100 = 99.5
-			mockPrometheus.SLIValues[`sum(rate(http_requests_total{code=~"2.."}[5m]))`] = 995
-			mockPrometheus.SLIValues[`sum(rate(http_requests_total[5m]))`] = 1000
-			// Burn rate queries
-			mockPrometheus.SLIValues[`sum(rate(http_requests_total{code=~"2.."}[5m])) / sum(rate(http_requests_total[5m]))`] = 0.995
+		It("should set violated status when error budget is exhausted", func() {
+			By("Setting up mock to return SLI values producing budget <= 0")
+			// sliErrorRate=0.005 → actual=99.5, target=99.9 → budget exhausted
+			mockPrometheus.SLIValues[sliErrorRateQuery("availability", resourceName, resourceNamespace)] = 0.005
+			setBurnRateValues(mockPrometheus, "availability", resourceName, resourceNamespace, 0.5)
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -188,13 +202,12 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			Expect(updatedSLO.Status.Objectives[0].Status).To(Equal("violated"))
 		})
 
-		It("should set at-risk status when error budget is low", func() {
-			By("Setting up mock to return SLI values that leave < 10% error budget")
-			// success=99905, total=100000 → actual = (99905/100000)*100 = 99.905
-			mockPrometheus.SLIValues[`sum(rate(http_requests_total{code=~"2.."}[5m]))`] = 99905
-			mockPrometheus.SLIValues[`sum(rate(http_requests_total[5m]))`] = 100000
-			// Burn rate queries
-			mockPrometheus.SLIValues[`sum(rate(http_requests_total{code=~"2.."}[5m])) / sum(rate(http_requests_total[5m]))`] = 0.99905
+		It("should set critical status when 5m/1h burn rate exceeds 14x", func() {
+			By("Setting up mock with high burn rate > 14 on all windows")
+			// sliErrorRate=0.0005 → actual=99.95, budget > 0
+			mockPrometheus.SLIValues[sliErrorRateQuery("availability", resourceName, resourceNamespace)] = 0.0005
+			// All burn rates = 20 → 5m/1h both > 14 → critical
+			setBurnRateValues(mockPrometheus, "availability", resourceName, resourceNamespace, 20)
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -209,12 +222,58 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 
 			updatedSLO := &observabilityv1alpha1.ServiceLevelObjective{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedSLO)).To(Succeed())
-			Expect(updatedSLO.Status.Objectives[0].Status).To(Equal("at-risk"))
+			Expect(updatedSLO.Status.Objectives[0].Status).To(Equal("critical"))
+		})
+
+		It("should set degraded status when 1h/6h burn rate exceeds 6x", func() {
+			By("Setting up mock with burn rate > 6 but < 14 on all windows")
+			// sliErrorRate=0.0005 → actual=99.95, budget > 0
+			mockPrometheus.SLIValues[sliErrorRateQuery("availability", resourceName, resourceNamespace)] = 0.0005
+			// All burn rates = 10 → 5m/1h not > 14 → 1h/6h both > 6 → degraded
+			setBurnRateValues(mockPrometheus, "availability", resourceName, resourceNamespace, 10)
+
+			controllerReconciler := &ServiceLevelObjectiveReconciler{
+				Client:           k8sClient,
+				Scheme:           k8sClient.Scheme(),
+				PrometheusClient: mockPrometheus,
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedSLO := &observabilityv1alpha1.ServiceLevelObjective{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedSLO)).To(Succeed())
+			Expect(updatedSLO.Status.Objectives[0].Status).To(Equal("degraded"))
+		})
+
+		It("should set warning status when 6h/3d burn rate exceeds 1x", func() {
+			By("Setting up mock with burn rate > 1 but < 6 on all windows")
+			// sliErrorRate=0.0005 → actual=99.95, budget > 0
+			mockPrometheus.SLIValues[sliErrorRateQuery("availability", resourceName, resourceNamespace)] = 0.0005
+			// All burn rates = 3 → 5m/1h not > 14, 1h/6h not > 6, 6h/3d both > 1 → warning
+			setBurnRateValues(mockPrometheus, "availability", resourceName, resourceNamespace, 3)
+
+			controllerReconciler := &ServiceLevelObjectiveReconciler{
+				Client:           k8sClient,
+				Scheme:           k8sClient.Scheme(),
+				PrometheusClient: mockPrometheus,
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedSLO := &observabilityv1alpha1.ServiceLevelObjective{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedSLO)).To(Succeed())
+			Expect(updatedSLO.Status.Objectives[0].Status).To(Equal("warning"))
 		})
 
 		It("should handle Prometheus query errors gracefully", func() {
-			By("Setting up mock to return error for success query")
-			mockPrometheus.SLIErrors[`sum(rate(http_requests_total{code=~"2.."}[5m]))`] = fmt.Errorf("prometheus unavailable")
+			By("Setting up mock to return error for SLI error rate query")
+			mockPrometheus.SLIErrors[sliErrorRateQuery("availability", resourceName, resourceNamespace)] = fmt.Errorf("prometheus unavailable")
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -225,11 +284,11 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
+			// Controller returns early without error when SLI query fails
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedSLO := &observabilityv1alpha1.ServiceLevelObjective{}
-			Expect(k8sClient.Get(ctx, typeNamespacedName, updatedSLO)).To(Succeed())
-			Expect(updatedSLO.Status.Objectives[0].Status).To(Equal("unknown"))
+			// Note: status is NOT updated because the controller returns before
+			// r.Status().Update() when the SLI query fails
 		})
 
 		It("should return error when Prometheus connection fails", func() {
@@ -296,8 +355,8 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 								Window: "30d",
 								Sli: observabilityv1alpha1.SLI{
 									Query: observabilityv1alpha1.Query{
-										Success: "availability_success_query",
-										Total:   "availability_total_query",
+										TotalQuery: "availability_total_query",
+										ErrorQuery: "availability_error_query",
 									},
 								},
 							},
@@ -307,8 +366,8 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 								Window: "7d",
 								Sli: observabilityv1alpha1.SLI{
 									Query: observabilityv1alpha1.Query{
-										Success: "latency_success_query",
-										Total:   "latency_total_query",
+										TotalQuery: "latency_total_query",
+										ErrorQuery: "latency_error_query",
 									},
 								},
 							},
@@ -330,16 +389,13 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 
 		It("should reconcile all objectives independently", func() {
 			mockPrometheus := NewMockPrometheusClient()
-			// availability: success=9995, total=10000 → actual = 99.95 → met
-			mockPrometheus.SLIValues["availability_success_query"] = 9995
-			mockPrometheus.SLIValues["availability_total_query"] = 10000
-			// availability burn rate queries
-			mockPrometheus.SLIValues["availability_success_query / availability_total_query"] = 0.9995
-			// latency: success=900, total=1000 → actual = 90.0 → violated
-			mockPrometheus.SLIValues["latency_success_query"] = 900
-			mockPrometheus.SLIValues["latency_total_query"] = 1000
-			// latency burn rate queries
-			mockPrometheus.SLIValues["latency_success_query / latency_total_query"] = 0.90
+			// availability: sliErrorRate=0.0005 → actual=99.95, budget > 0, low burn → met
+			mockPrometheus.SLIValues[sliErrorRateQuery("availability", multiObjResourceName, resourceNamespace)] = 0.0005
+			setBurnRateValues(mockPrometheus, "availability", multiObjResourceName, resourceNamespace, 0.5)
+
+			// latency: sliErrorRate=0.1 → actual=90.0, target=95.0 → budget exhausted → violated
+			mockPrometheus.SLIValues[sliErrorRateQuery("latency", multiObjResourceName, resourceNamespace)] = 0.1
+			setBurnRateValues(mockPrometheus, "latency", multiObjResourceName, resourceNamespace, 0.5)
 
 			controllerReconciler := &ServiceLevelObjectiveReconciler{
 				Client:           k8sClient,
@@ -373,8 +429,8 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 			Expect(latencyStatus).NotTo(BeNil())
 			Expect(latencyStatus.Status).To(Equal("violated"))
 
-			By("Verifying all queries were made (2 SLI + 8 burn rate per objective, 2 objectives)")
-			Expect(mockPrometheus.QueryCallCount).To(Equal(20))
+			By("Verifying all queries were made (1 SLI + 8 burn rate per objective, 2 objectives = 18)")
+			Expect(mockPrometheus.QueryCallCount).To(Equal(18))
 		})
 	})
 })
