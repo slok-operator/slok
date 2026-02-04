@@ -4,14 +4,17 @@ All notable changes to the SLOK project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [v0.2.0] - 2026-02-03
+## [v0.2.0] - 2026-02-04
 
 ### Added
 
-#### `$window` Placeholder in SLI Queries
-- The controller now resolves `$window` in SLI `success` and `total` queries, replacing it with the objective's `window` value (e.g., `7d`, `30d`)
-- Burn rate queries also resolve `$window` per preset window (short/long)
-- Users can write queries like `sum(increase(http_requests_total[$window]))` without hardcoding the window
+#### Recording Rules
+- SLOK now generates Prometheus recording rules for each objective:
+  - `slok:sli_error_rate:WINDOW` for 6 windows (5m, 1h, 6h, 3d, 7d, 30d)
+  - `slok:objective_target` and `slok:error_budget_target` constants
+  - `slok:burn_rate:WINDOW` for each window
+- Zero-traffic safety: error rate rules use `clamp_min(..., 1e-12)` with `OR` fallback to avoid NaN/division-by-zero when there is no traffic
+- Burn rate rules use `on (slo_name, slo_namespace, objective_name)` for label matching
 
 #### Multi-Window Burn Rate Calculation
 - Added 4 default burn rate presets based on the Google SRE Workbook:
@@ -19,32 +22,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - 1h/6h (>6x, high burn)
   - 6h/3d (>1x, erosion)
   - 7d/30d (>0.5x, slow burn)
-- Burn rate values rounded to 2 decimal places
 - Each objective now reports burn rate metrics for all presets in its status
 
 #### PrometheusRule Generation
-- Automatic generation of PrometheusRule resources for burn rate alerts when `burnRateAlerts.enabled: true`
-- Each preset generates a dual-condition expression: `(1 - (success/total)) / (1 - (target/100)) > burnRate` for both long and short windows
-- Alert names: `SLOBurnRateOutage` (critical), `SLOBurnRateHigh` (critical), `SLOBurnRateErosion` (warning), `SLOBurnRateSlow` (warning)
+- Automatic generation of PrometheusRule resources with recording rules and burn rate alerts when `burnRateAlerts.enabled: true`
+- Alert expressions use recording rules: `slok:burn_rate:SHORT > threshold AND slok:burn_rate:LONG > threshold`
 - Budget error alerts with default `SLOObjectiveAtRisk` and `SLOObjectiveViolated` rules when `budgetErrorAlerts.enabled: true`
 - Support for custom budget threshold alerts via `budgetErrorAlerts.alerts`
+- PrometheusRules managed idempotently with `CreateOrUpdate` and `SetControllerReference` for automatic garbage collection
+
+#### CRD Enhancements
+- Added `shortName: slo` for `kubectl get slo` support
+- Added printer columns: Display Name, Status, Actual, Target, Budget %, Age
 
 #### Prometheus Metrics
 - Added `slo_objective_status` gauge metric with status label
 
 ### Changed
 
+#### SLI Query Model (Breaking)
+- **Breaking**: Renamed query fields from `success`/`total` to `errorQuery`/`totalQuery`
+- The SLI is now computed as an error rate: `error_rate = errorQuery / totalQuery`
+- Queries should be Prometheus metric selectors (e.g., `http_requests_total{status=~"5.."}`), not full PromQL expressions; the operator wraps them in `sum(rate(...[window]))` via recording rules
+- Removed `$window` placeholder -- recording rules handle all time windows internally
+
+#### Status Determination (Breaking)
+- **Breaking**: Removed `at-risk` status
+- Added new statuses based on multi-window burn rates: `warning`, `degraded`, `critical`
+- Status is now determined by burn rate thresholds:
+  - `violated`: error budget exhausted (budget <= 0%)
+  - `critical`: 5m/1h burn rate both > 14x
+  - `degraded`: 1h/6h burn rate both > 6x
+  - `warning`: 6h/3d burn rate both > 1x
+  - `met`: all burn rates below thresholds
+
 #### CRD Structure
 - `Alerting` now uses separate `budgetErrorAlerts` and `burnRateAlerts` sections, each with its own `enabled` flag
 - `BurnRateStatus` in `ObjectiveStatus` changed from single struct to `[]BurnRateStatus` array (one entry per burn rate preset)
-- `BurnRateStatus` fields updated: removed `burnRateThreshold` and `status`, added `longWindow` and `shortWindow`
-
-#### SLI Queries
-- Switched recommended query pattern from `rate(...[5m])` to `increase(...[$window])` for proper rolling-window error budget tracking
-- Error budget now reflects accumulated errors over the full window and recovers only when errors exit the trailing edge
+- `BurnRateStatus` field order: `shortWindow`, `shortBurnRate`, `longWindow`, `longBurnRate`
 
 #### Error Budget
-- `DetermineStatus` function moved to `errorbudget` package (also available in `burnrate` package)
+- `DetermineStatus` function moved to `errorbudget` package
+- `Calculate` now takes a single `sliErrorRate` parameter (error rate ratio 0-1) instead of separate success/total values
 
 ## [v0.1.0] - 2026-01-30
 

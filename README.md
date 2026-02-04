@@ -27,12 +27,12 @@ spec:
       window: 7d
       sli:
         query:
-          success: sum(increase(http_requests_total{status=~"2.."}[$window]))
-          total: sum(increase(http_requests_total[$window]))
+          totalQuery: http_requests_total
+          errorQuery: http_requests_total{status=~"5.."}
 EOF
 
 # 3. Check the status
-kubectl get slo my-api-availability -o yaml
+kubectl get slo
 ```
 
 ## Prerequisites
@@ -103,7 +103,7 @@ kubectl get crd servicelevelobjectives.observability.slok.io
 
 ### Availability SLO
 
-Track the percentage of successful HTTP requests:
+Track the error rate of HTTP requests:
 
 ```yaml
 apiVersion: observability.slok.io/v1alpha1
@@ -114,19 +114,27 @@ spec:
   displayName: "Payment API Availability"
   objectives:
     - name: availability
-      target: 99.9        # Target: 99.9% successful requests
+      target: 99.9        # Target: 99.9% non-error requests
       window: 30d         # Over a 30-day rolling window
       sli:
         query:
-          success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[$window]))
-          total: sum(increase(http_requests_total{service="payment-api"}[$window]))
+          totalQuery: http_requests_total{service="payment-api"}
+          errorQuery: http_requests_total{service="payment-api", status=~"5.."}
 ```
 
 ### Latency SLO
 
-Track the percentage of requests under a latency threshold:
+Track the percentage of requests above a latency threshold. For histogram-based
+latency SLOs, create a recording rule that computes slow requests and reference it
+as the error metric:
 
 ```yaml
+# Prerequisite: create a recording rule for slow requests
+# - record: http_request_slow_total
+#   expr: |
+#     http_request_duration_seconds_count{service="checkout"}
+#     - http_request_duration_seconds_bucket{service="checkout", le="0.5"}
+
 apiVersion: observability.slok.io/v1alpha1
 kind: ServiceLevelObjective
 metadata:
@@ -139,8 +147,8 @@ spec:
       window: 7d
       sli:
         query:
-          success: sum(increase(http_request_duration_seconds_bucket{service="checkout", le="0.5"}[$window]))
-          total: sum(increase(http_request_duration_seconds_count{service="checkout"}[$window]))
+          totalQuery: http_request_duration_seconds_count{service="checkout"}
+          errorQuery: http_request_slow_total{service="checkout"}
 ```
 
 ### Multiple Objectives
@@ -160,21 +168,34 @@ spec:
       window: 30d
       sli:
         query:
-          success: sum(increase(http_requests_total{job="api-gateway", status!~"5.."}[$window]))
-          total: sum(increase(http_requests_total{job="api-gateway"}[$window]))
+          totalQuery: http_requests_total{job="api-gateway"}
+          errorQuery: http_requests_total{job="api-gateway", status=~"5.."}
 
-    - name: latency-p99
+    - name: error-rate
       target: 99.0
       window: 30d
       sli:
         query:
-          success: sum(increase(http_request_duration_seconds_bucket{job="api-gateway", le="0.3"}[$window]))
-          total: sum(increase(http_request_duration_seconds_count{job="api-gateway"}[$window]))
+          totalQuery: grpc_server_handled_total{job="api-gateway"}
+          errorQuery: grpc_server_handled_total{job="api-gateway", grpc_code!="OK"}
 ```
 
 ### Check SLO Status
 
 ```bash
+# Quick overview with printer columns
+kubectl get slo
+```
+
+Output:
+```
+NAME                        DISPLAY NAME               STATUS    ACTUAL   TARGET   BUDGET %   AGE
+payment-api-availability    Payment API Availability   met       99.95    99.9     50         30d
+api-gateway-slo             API Gateway SLO            warning   99.92    99.95    12.5       15d
+```
+
+```bash
+# Full status detail
 kubectl get slo payment-api-availability -o yaml
 ```
 
@@ -185,29 +206,29 @@ status:
     - name: availability
       target: 99.9
       actual: 99.87
-      status: violated      # met | at-risk | violated | unknown
+      status: violated      # met | warning | degraded | critical | violated | unknown
       errorBudget:
         total: "43.2m"
         consumed: "56.2m"
         remaining: "0.0m"
         percentRemaining: 0.0
       burnRate:
-        - longBurnRate: 0.5
+        - shortWindow: "5m"
           shortBurnRate: 0.48
           longWindow: "1h"
-          shortWindow: "5m"
-        - longBurnRate: 0.33
+          longBurnRate: 0.5
+        - shortWindow: "1h"
           shortBurnRate: 0.31
           longWindow: "6h"
-          shortWindow: "1h"
-        - longBurnRate: 0.12
+          longBurnRate: 0.33
+        - shortWindow: "6h"
           shortBurnRate: 0.1
           longWindow: "3d"
-          shortWindow: "6h"
-        - longBurnRate: 0.06
+          longBurnRate: 0.12
+        - shortWindow: "7d"
           shortBurnRate: 0.05
           longWindow: "30d"
-          shortWindow: "7d"
+          longBurnRate: 0.06
       lastQueried: "2026-01-28T10:30:00Z"
   lastUpdateTime: "2026-01-28T10:30:00Z"
   conditions:
@@ -216,11 +237,25 @@ status:
       reason: Reconciled
 ```
 
+### Status Values
+
+The objective status is determined by burn rate thresholds (Google SRE Workbook):
+
+| Status | Condition |
+|--------|-----------|
+| `violated` | Error budget exhausted (remaining <= 0%) |
+| `critical` | 5m/1h burn rate both > 14x |
+| `degraded` | 1h/6h burn rate both > 6x |
+| `warning` | 6h/3d burn rate both > 1x |
+| `met` | All burn rates below thresholds |
+| `unknown` | Unable to query Prometheus |
+
 ## Alerting
 
 SLOK generates `PrometheusRule` resources in the same namespace as the SLO. Each
 alert type (`budgetErrorAlerts`, `burnRateAlerts`) is independently enabled via its
-own `enabled` flag.
+own `enabled` flag. PrometheusRules are managed idempotently (`CreateOrUpdate`) and
+owned by the SLO resource for automatic garbage collection.
 
 ### Budget Alerts
 
@@ -239,8 +274,8 @@ objectives:
     window: 30d
     sli:
       query:
-        success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[$window]))
-        total: sum(increase(http_requests_total{service="payment-api"}[$window]))
+        totalQuery: http_requests_total{service="payment-api"}
+        errorQuery: http_requests_total{service="payment-api", status=~"5.."}
     alerting:
       budgetErrorAlerts:
         enabled: true
@@ -260,29 +295,37 @@ the [Google SRE Workbook](https://sre.google/workbook/alerting-on-slos/).
 The idea is to alert when the error budget is being consumed faster than expected,
 rather than waiting for it to run out.
 
+#### Recording Rules
+
+SLOK generates a set of Prometheus recording rules for each objective:
+
+| Rule | Expression | Purpose |
+|------|-----------|---------|
+| `slok:sli_error_rate:WINDOW` | `sum(rate(errorQuery[WINDOW])) / sum(rate(totalQuery[WINDOW]))` | Error rate over window |
+| `slok:error_budget_target` | `vector(1 - target/100)` | Allowed error fraction |
+| `slok:burn_rate:WINDOW` | `slok:sli_error_rate:WINDOW / slok:error_budget_target` | Burn rate factor |
+
+Windows: 5m, 1h, 6h, 3d, 7d, 30d. All error rate rules include zero-traffic
+safety (`clamp_min` + `OR` fallback) to avoid NaN when there is no traffic.
+
 #### Default Presets
 
 When `burnRateAlerts.enabled` is `true`, SLOK automatically creates four predefined
 alert rules based on the Google SRE Workbook approach:
 
-| Alert | Short Window | Long Window | Burn Rate | Severity | For | Meaning |
-|-------|-------------|-------------|-----------|----------|-----|---------|
-| `SLOBurnRateOutage` | 5m | 1h | >14x | critical | 2m | Active outage |
-| `SLOBurnRateHigh` | 1h | 6h | >6x | critical | 15m | High burn |
-| `SLOBurnRateErosion` | 6h | 3d | >1x | warning | 1h | Steady erosion |
-| `SLOBurnRateSlow` | 7d | 30d | >0.5x | warning | 3h | Slow burn |
+| Alert | Short Window | Long Window | Burn Rate | Severity | Meaning |
+|-------|-------------|-------------|-----------|----------|---------|
+| `SLOBurnRateHigh - Critical` | 5m | 1h | >14x | critical | Active outage |
+| `SLOBurnRateHigh - Degraded` | 1h | 6h | >6x | warning | High burn |
+| `SLOBurnRateHigh - Warning` | 6h | 3d | >1x | warning | Steady erosion |
+| `ErrorBudget Finished` | -- | objective window | >1x | warning | Budget exhausted |
 
 Each rule fires when **both** the long-window and short-window burn rates exceed
-the threshold. The expression generated for each preset is:
+the threshold. The generated expression uses recording rules:
 
 ```
-(1 - (success_long / total_long)) / (1 - (target / 100)) > burnRate
-AND
-(1 - (success_short / total_short)) / (1 - (target / 100)) > burnRate
+slok:burn_rate:SHORT > threshold AND slok:burn_rate:LONG > threshold
 ```
-
-The `$window` placeholder in the SLI queries is resolved to the preset's long/short
-window values for each rule.
 
 #### Custom Burn Rate Alerts
 
@@ -304,8 +347,8 @@ objectives:
     window: 30d
     sli:
       query:
-        success: sum(increase(http_requests_total{service="payment-api", status=~"2.."}[$window]))
-        total: sum(increase(http_requests_total{service="payment-api"}[$window]))
+        totalQuery: http_requests_total{service="payment-api"}
+        errorQuery: http_requests_total{service="payment-api", status=~"5.."}
     alerting:
       burnRateAlerts:
         enabled: true
@@ -371,87 +414,79 @@ it is being consumed. Using both gives you coverage for slow, sustained degradat
 
 | Limitation | Description | Workaround |
 |------------|-------------|------------|
-| **Manual PromQL required** | No query templates or builders | Write PromQL directly in the spec |
-| **Instant queries only** | Uses Prometheus instant query, not range query | Use `increase(...[window])` for rolling window SLIs |
+| **Manual PromQL required** | No query templates or builders | Write metric selectors directly in the spec |
+| **Instant queries only** | Uses Prometheus instant query for status, recording rules for SLI | Recording rules handle the rate/window computation |
 | **No multi-cluster support** | One operator per cluster | Deploy SLOK in each cluster |
 | **Fixed reconciliation interval** | SLOs are re-evaluated every 1 minute | Cannot be configured per-SLO |
-| **Prometheus Operator required for alerts** | PrometheusRule generation requires the Prometheus Operator CRDs | Install the Prometheus Operator or disable `alerting.enabled` |
+| **Prometheus Operator required for alerts** | PrometheusRule generation requires the Prometheus Operator CRDs | Install the Prometheus Operator or disable alerting |
+| **Histogram latency SLOs** | Cannot express "slow requests" as a single metric selector | Create a recording rule for slow request count |
 
 ### Query Requirements
 
-The SLI is defined as a ratio of two PromQL queries: `success` (numerator) and `total` (denominator). The operator computes `(success / total) * 100` to get the actual percentage.
+The SLI is defined by two Prometheus metric selectors: `errorQuery` (error events)
+and `totalQuery` (total events). SLOK generates recording rules that compute the
+error rate for multiple time windows.
 
-Each query **must**:
-- Return a single instant vector value (use `sum()` to aggregate)
-- Use `increase(...[$window])` so the operator resolves `$window` to the objective's window value at runtime
+Each field should contain a **metric selector** (metric name with optional label
+matchers). The operator wraps these in `sum(rate(...[window]))` when generating
+recording rules. Do **not** include `sum()`, `rate()`, or `increase()` in the queries.
 
-The `$window` placeholder is automatically replaced by the controller with the objective's
-`window` field (e.g., `7d`, `30d`). This avoids duplicating the window value in the query
-and ensures burn rate queries use the correct windows for each preset.
-
-Use `increase()` instead of `rate()` so that the error budget reflects accumulated errors
-over the entire rolling window. With `rate()`, the error budget would only reflect the
-last few minutes and would recover instantly once errors stop. With `increase()`, errors
-are tracked over the full window and only "fall off" when they exit the trailing edge
-(e.g., after 7 days for a 7-day window).
-
-**Good queries (using `$window` placeholder):**
-```yaml
-# $window is resolved to the objective window (e.g., 7d, 30d)
-sli:
-  query:
-    success: sum(increase(http_requests_total{status=~"2.."}[$window]))
-    total: sum(increase(http_requests_total[$window]))
-```
-
-**Also valid (hardcoded window):**
-```yaml
-# Hardcoded window -- works but you must keep it in sync with the window field
-sli:
-  query:
-    success: sum(increase(http_requests_total{status=~"2.."}[7d]))
-    total: sum(increase(http_requests_total[7d]))
-```
-
-**Bad query** (returns a multi-element vector):
+**Good queries (metric selectors):**
 ```yaml
 sli:
   query:
-    success: increase(http_requests_total{status=~"2.."}[$window])
-    total: increase(http_requests_total[$window])
+    totalQuery: http_requests_total{service="payment-api"}
+    errorQuery: http_requests_total{service="payment-api", status=~"5.."}
 ```
 
-**Bad query** (instantaneous rate, no rolling window memory):
+**Bad query** (includes PromQL functions -- the operator adds these automatically):
 ```yaml
 sli:
   query:
-    success: sum(rate(http_requests_total{status=~"2.."}[5m]))
-    total: sum(rate(http_requests_total[5m]))
+    totalQuery: sum(rate(http_requests_total{service="payment-api"}[5m]))
+    errorQuery: sum(rate(http_requests_total{service="payment-api", status=~"5.."}[5m]))
 ```
+
+**Bad query** (returns a multi-element vector -- always use a specific label selector):
+```yaml
+sli:
+  query:
+    totalQuery: http_requests_total
+    errorQuery: http_requests_total{status=~"5.."}
+# This works if there is exactly one matching series; use specific labels to ensure that.
+```
+
+The generated recording rules produce these metrics:
+```
+slok:sli_error_rate:5m   = sum(rate(errorQuery[5m])) / sum(rate(totalQuery[5m]))
+slok:sli_error_rate:1h   = sum(rate(errorQuery[1h])) / sum(rate(totalQuery[1h]))
+slok:sli_error_rate:6h   = ...
+slok:sli_error_rate:3d   = ...
+slok:sli_error_rate:7d   = ...
+slok:sli_error_rate:30d  = ...
+```
+
+The controller queries `slok:sli_error_rate:5m` to compute the current SLI and
+error budget, and `slok:burn_rate:*` for burn rate status.
 
 ### Error Budget Calculation
 
-The operator calculates the error budget from the success/total ratio returned by
-the SLI queries. Because the queries use `increase(...[window])`, the ratio
-represents the actual success rate over the entire rolling window, and the error
-budget tracks real accumulated errors.
+The operator calculates the error budget from the error rate returned by the
+recording rules:
 
 ```
-actual            = (success / total) * 100
-error_budget      = (100 - target) * window_in_seconds
-consumed          = (100 - actual) / 100 * window_in_seconds
+error_rate        = slok:sli_error_rate:5m (from recording rule)
+actual            = 100 - (error_rate * 100)
+error_budget      = (100 - target) / 100 * window_in_seconds
+consumed          = error_rate * window_in_seconds
 remaining         = error_budget - consumed
 percent_remaining = (remaining / error_budget) * 100
 ```
 
 Example for a 99.9% target over 30 days:
 - Error budget: 0.1% of 30 days = 43.2 minutes
-- If actual is 99.87%, consumed = 0.13% of 30 days = 56.2 minutes
+- If error rate is 0.0013 (actual = 99.87%), consumed = 0.13% of 30 days = 56.2 minutes
 - Remaining = 0 (budget exhausted, status: **violated**)
-
-The budget recovers only when errors exit the trailing edge of the rolling window.
-An error that occurred on Monday will stop counting against the budget the following
-Monday (for a 7-day window) or 30 days later (for a 30-day window).
 
 ## Development
 
