@@ -6,6 +6,7 @@ import (
 	"time"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
+	"github.com/federicolepera/slok/internal/burnrate"
 )
 
 type Budget struct {
@@ -22,18 +23,13 @@ type Budget struct {
 	PercentRemaining float64
 }
 
-func calculatePercentage(target float64, sliSuccessValue float64, sliTotalValue float64, window string) (*Budget, float64, error) {
+func calculatePercentage(target float64, sliErrorRate float64, window string) (*Budget, float64, error) {
 	duration, err := parseWindow(window)
 	if err != nil {
 		return &Budget{}, 0.0, err
 	}
 	totalSeconds := duration.Seconds()
-	actual := 0.0
-	if sliTotalValue > 0 {
-		actual = (sliSuccessValue / sliTotalValue) * 100.0
-	} else if sliTotalValue == 0.0 {
-		actual = 100.0
-	}
+	actual := 100.0 - (sliErrorRate * 100)
 	errorBudgetPercent := 100.0 - target
 	errorBudgetSeconds := (errorBudgetPercent / 100.0) * totalSeconds
 
@@ -61,8 +57,8 @@ func calculatePercentage(target float64, sliSuccessValue float64, sliTotalValue 
 	}, math.Round(actual*100) / 100, nil
 }
 
-func Calculate(obj observabilityv1alpha1.Objective, sliSuccessValue float64, sliTotalValue float64) (*Budget, float64, error) {
-	return calculatePercentage(obj.Target, sliSuccessValue, sliTotalValue, obj.Window)
+func Calculate(obj observabilityv1alpha1.Objective, sliErrorRate float64) (*Budget, float64, error) {
+	return calculatePercentage(obj.Target, sliErrorRate, obj.Window)
 }
 
 // parseWindow converts window string to duration
@@ -94,14 +90,30 @@ func parseWindow(window string) (time.Duration, error) {
 	}
 }
 
-func DetermineStatus(target float64, actual float64, budgetPercente float64) string {
-	if actual < target {
+func DetermineStatus(target float64, actual float64, budgetPercente float64, burnRates []burnrate.BurnRate) string {
+	if budgetPercente <= 0 {
 		return observabilityv1alpha1.ObjectiveConditionViolated
 	}
-
-	if budgetPercente < 10.0 && budgetPercente >= 0.0 {
-		return observabilityv1alpha1.ObjectiveConditionAtRisk
+	shortBurnRate, longBurnRate := burn("5m", "1h", burnRates)
+	if shortBurnRate > 14 && longBurnRate > 14 {
+		return observabilityv1alpha1.ObjectiveConditionCritical
 	}
-
+	shortBurnRate, longBurnRate = burn("1h", "6h", burnRates)
+	if shortBurnRate > 6 && longBurnRate > 6 {
+		return observabilityv1alpha1.ObjectiveConditionDegraded
+	}
+	shortBurnRate, longBurnRate = burn("6h", "3d", burnRates)
+	if shortBurnRate > 1 && longBurnRate > 1 {
+		return observabilityv1alpha1.ObjectiveConditionWarning
+	}
 	return observabilityv1alpha1.ObjectiveConditionMet
+}
+
+func burn(shortWindow string, longWindow string, burnRates []burnrate.BurnRate) (float64, float64) {
+	for _, br := range burnRates {
+		if br.ShortWindow == shortWindow && br.LongWindow == longWindow {
+			return br.ShortBurnRate, br.LongBurnRate
+		}
+	}
+	return 0.0, 0.0
 }
