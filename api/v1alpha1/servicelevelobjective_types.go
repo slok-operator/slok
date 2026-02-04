@@ -106,11 +106,11 @@ type Alerting struct {
 type Query struct {
 	// success is the PromQL query that returns the count of successful events (numerator).
 	// +required
-	Success string `json:"success"`
+	TotalQuery string `json:"totalQuery"`
 
 	// total is the PromQL query that returns the total count of events (denominator).
 	// +required
-	Total string `json:"total"`
+	ErrorQuery string `json:"errorQuery"`
 }
 
 // SLI (Service Level Indicator) defines how the objective is measured.
@@ -122,17 +122,12 @@ type SLI struct {
 
 // Possible values for ObjectiveStatus.Status.
 const (
-	// ObjectiveConditionMet indicates the objective target is being met.
-	ObjectiveConditionMet = "met"
-
-	// ObjectiveConditionAtRisk indicates the error budget is running low.
-	ObjectiveConditionAtRisk = "at-risk"
-
-	// ObjectiveConditionViolated indicates the objective target has been breached.
+	ObjectiveConditionMet	  = "met"
+	ObjectiveConditionWarning = "warning"
+	ObjectiveConditionDegraded = "degraded"
+	ObjectiveConditionCritical  = "critical"
 	ObjectiveConditionViolated = "violated"
-
-	// ObjectiveConditionUnknown indicates the objective state could not be determined.
-	ObjectiveConditionUnknown = "unknown"
+	ObjectiveConditionUnknown  = "unknown"
 )
 
 // Objective represents a single measurable target within a ServiceLevelObjective.
@@ -193,8 +188,8 @@ type ErrorBudgetStatus struct {
 
 // BurnRateStatus represents the observed burn rate for an objective.
 type BurnRateStatus struct {
-	// longBurnRate is the burn rate computed over the long observation window.
-	LongBurnRate float64 `json:"longBurnRate"`
+	// shortWindow is the duration of the short observation window (e.g., "5m").
+	ShortWindow string `json:"shortWindow"`
 
 	// shortBurnRate is the burn rate computed over the short observation window.
 	ShortBurnRate float64 `json:"shortBurnRate"`
@@ -202,8 +197,8 @@ type BurnRateStatus struct {
 	// longWindow is the duration of the long observation window (e.g., "1h").
 	LongWindow string `json:"longWindow"`
 
-	// shortWindow is the duration of the short observation window (e.g., "5m").
-	ShortWindow string `json:"shortWindow"`
+	// longBurnRate is the burn rate computed over the long observation window.
+	LongBurnRate float64 `json:"longBurnRate"`
 }
 
 // ObjectiveStatus represents the observed state of a single objective.
@@ -218,7 +213,7 @@ type ObjectiveStatus struct {
 	Actual float64 `json:"actual"`
 
 	// status indicates whether the objective is being met.
-	// +kubebuilder:validation:Enum=met;at-risk;violated;unknown
+	// +kubebuilder:validation:Enum=met;warning;degraded;critical;violated;unknown
 	Status string `json:"status"`
 
 	// errorBudget contains details about error budget consumption.
@@ -259,6 +254,13 @@ type ServiceLevelObjectiveStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=slo
+// +kubebuilder:printcolumn:name="Display Name",type=string,JSONPath=`.spec.displayName`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.objectives[0].status`
+// +kubebuilder:printcolumn:name="Actual",type=number,JSONPath=`.status.objectives[0].actual`,format=float
+// +kubebuilder:printcolumn:name="Target",type=number,JSONPath=`.status.objectives[0].target`,format=float
+// +kubebuilder:printcolumn:name="Budget %",type=number,JSONPath=`.status.objectives[0].errorBudget.percentRemaining`,format=float
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // ServiceLevelObjective is the Schema for the servicelevelobjectives API
 type ServiceLevelObjective struct {

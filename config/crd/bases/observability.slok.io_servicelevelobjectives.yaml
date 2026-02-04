@@ -11,10 +11,34 @@ spec:
     kind: ServiceLevelObjective
     listKind: ServiceLevelObjectiveList
     plural: servicelevelobjectives
+    shortNames:
+    - slo
     singular: servicelevelobjective
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .status.objectives[0].status
+      name: Status
+      type: string
+    - format: float
+      jsonPath: .status.objectives[0].actual
+      name: Actual
+      type: number
+    - format: float
+      jsonPath: .status.objectives[0].target
+      name: Target
+      type: number
+    - format: float
+      jsonPath: .status.objectives[0].errorBudget.percentRemaining
+      name: Budget %
+      type: number
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ServiceLevelObjective is the Schema for the servicelevelobjectives
@@ -165,17 +189,17 @@ spec:
                           description: query contains the PromQL queries used to compute
                             the SLI value.
                           properties:
-                            success:
-                              description: success is the PromQL query that returns
-                                the count of successful events (numerator).
-                              type: string
-                            total:
+                            errorQuery:
                               description: total is the PromQL query that returns
                                 the total count of events (denominator).
                               type: string
+                            totalQuery:
+                              description: success is the PromQL query that returns
+                                the count of successful events (numerator).
+                              type: string
                           required:
-                          - success
-                          - total
+                          - errorQuery
+                          - totalQuery
                           type: object
                       required:
                       - query
@@ -354,7 +378,9 @@ spec:
                         met.
                       enum:
                       - met
-                      - at-risk
+                      - warning
+                      - degraded
+                      - critical
                       - violated
                       - unknown
                       type: string
