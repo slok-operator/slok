@@ -23,42 +23,37 @@ type Budget struct {
 	PercentRemaining float64
 }
 
-func calculatePercentage(target float64, sliErrorRate float64, window string) (*Budget, float64, error) {
+func calculatePercentage(target float64, sliBurnRateWindowed float64, sliErrorRate float64, window string) (*Budget, float64, error) {
 	duration, err := parseWindow(window)
 	if err != nil {
 		return &Budget{}, 0.0, err
 	}
 	totalSeconds := duration.Seconds()
 	actual := 100.0 - (sliErrorRate * 100)
-	errorBudgetPercent := 100.0 - target
-	errorBudgetSeconds := (errorBudgetPercent / 100.0) * totalSeconds
+	budgetRemainingPercent := 100.0 - (sliBurnRateWindowed * 100.0)
+	errorBudgetSecondsRemaining := (budgetRemainingPercent / 100.0) * totalSeconds
 
-	actualErrorPercent := 100.0 - actual
-	consumedErrorSeconds := (actualErrorPercent / 100.0) * totalSeconds
+	consumedErrorSeconds := totalSeconds - errorBudgetSecondsRemaining
 
-	remainingErrorSeconds := errorBudgetSeconds - consumedErrorSeconds
-
-	percentRemaining := 0.0
-
-	// Normalize remaining error seconds
-	if remainingErrorSeconds < 0 {
-		remainingErrorSeconds = 0
+	if errorBudgetSecondsRemaining < 0 {
+		errorBudgetSecondsRemaining = 0
 	}
 
-	if remainingErrorSeconds > 0 {
-		percentRemaining = (remainingErrorSeconds / errorBudgetSeconds) * 100.0
+	// Normalize remaining error seconds
+	if budgetRemainingPercent < 0 {
+		budgetRemainingPercent = 0
 	}
 
 	return &Budget{
-		Total:            fmt.Sprintf("%.1fm", errorBudgetSeconds/60.0),
+		Total:            fmt.Sprintf("%.1fm", totalSeconds/60.0),
 		Consumed:         fmt.Sprintf("%.1fm", consumedErrorSeconds/60.0),
-		Remaining:        fmt.Sprintf("%.1fm", remainingErrorSeconds/60.0),
-		PercentRemaining: math.Round(percentRemaining*100) / 100,
+		Remaining:        fmt.Sprintf("%.1fm", errorBudgetSecondsRemaining/60.0),
+		PercentRemaining: math.Round(budgetRemainingPercent*100) / 100,
 	}, math.Round(actual*100) / 100, nil
 }
 
-func Calculate(obj observabilityv1alpha1.Objective, sliErrorRate float64) (*Budget, float64, error) {
-	return calculatePercentage(obj.Target, sliErrorRate, obj.Window)
+func Calculate(obj observabilityv1alpha1.Objective, sliBurnRateWindowed float64, sliErrorRate float64) (*Budget, float64, error) {
+	return calculatePercentage(obj.Target, sliBurnRateWindowed, sliErrorRate, obj.Window)
 }
 
 // parseWindow converts window string to duration
