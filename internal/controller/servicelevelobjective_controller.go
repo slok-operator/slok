@@ -128,7 +128,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		sliErrorRate5mQuery := fmt.Sprintf("slok:sli_error_rate:5m{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", obj.Name, slo.Name, slo.Namespace)
 		sliErrorRate5m, err := r.PrometheusClient.QuerySLI(ctx, sliErrorRate5mQuery)
 		if err != nil {
-			logger.Error(err, "unable to query SLI error rate 5m", "sli_query", sliErrorRate5mQuery)
+			logger.Error(err, "unable to query SLI error rate for 5m window", "sli_query", sliErrorRate5mQuery)
 			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
 				Name:   obj.Name,
 				Target: obj.Target,
@@ -144,7 +144,27 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			})
 			continue
 		}
-		budget, sliValue, err := errorbudget.Calculate(obj, sliErrorRate5m)
+		logger.Info("SLI error rate for 5m window", "objective_name", obj.Name, "sli_error_rate_5m", sliErrorRate5m)
+		sliBurnRateWindowedQuery := fmt.Sprintf("slok:burn_rate:%s{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", obj.Window, obj.Name, slo.Name, slo.Namespace)
+		sliBurnRateWindowed, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateWindowedQuery)
+		if err != nil {
+			logger.Error(err, "unable to query SLI burn rate windowed", "sli_query", sliBurnRateWindowedQuery)
+			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
+				Name:   obj.Name,
+				Target: obj.Target,
+				Actual: 0,
+				Status: observabilityv1alpha1.ObjectiveConditionUnknown,
+				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+					Total:            "unknown",
+					Consumed:         "unknown",
+					Remaining:        "unknown",
+					PercentRemaining: 0,
+				},
+				LastQueried: metav1.Now(),
+			})
+			continue
+		}
+		budget, sliValue, err := errorbudget.Calculate(obj, sliBurnRateWindowed, sliErrorRate5m)
 		if err != nil {
 			logger.Error(err, "unable to calculate error budget", "objective_name", obj.Name)
 			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{

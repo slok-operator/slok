@@ -44,6 +44,7 @@ func baseLabels(sloName, sloNamespace, objectiveName, window string) map[string]
 		"slo_name":       sloName,
 		"slo_namespace":  sloNamespace,
 		"objective_name": objectiveName,
+		"objective_id":   fmt.Sprintf("%s/%s", sloName, objectiveName),
 		"slok_window":    window,
 	}
 }
