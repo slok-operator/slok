@@ -142,7 +142,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 				},
 				LastQueried: metav1.Now(),
 			})
-			return ctrl.Result{}, nil
+			continue
 		}
 		budget, sliValue, err := errorbudget.Calculate(obj, sliErrorRate5m)
 		if err != nil {

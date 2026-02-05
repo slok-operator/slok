@@ -21,7 +21,7 @@ type BurnRate struct {
 func Calculate(obj observabilityv1alpha1.Objective, sliShortWindow float64, sliLongWindow float64) (BurnRate, error) {
 	burnShortRate := math.Round(((1-sliShortWindow)/(1-obj.Target/100))*100) / 100
 	burnLongRate := math.Round(((1-sliLongWindow)/(1-obj.Target/100))*100) / 100
-	//sloWindowduration, err := parseWindow(obj.Window)
+	// sloWindowduration, err := parseWindow(obj.Window)
 	// if err != nil {
 	// 	return BurnRate{}, err
 	// }
@@ -29,7 +29,7 @@ func Calculate(obj observabilityv1alpha1.Objective, sliShortWindow float64, sliL
 	// if err != nil {
 	// 	return BurnRate{}, err
 	// }
-	//burnRateThreshold := (obj.Alerting.BurnRateAlerts[0].ConsumePercent / 100) * float64(sloWindowduration.Hours()) / float64(burnRateWindow.Hours())
+	// burnRateThreshold := (obj.Alerting.BurnRateAlerts[0].ConsumePercent / 100) * float64(sloWindowduration.Hours()) / float64(burnRateWindow.Hours())
 	return BurnRate{
 		LongBurnRate:  burnLongRate,
 		ShortBurnRate: burnShortRate,

@@ -122,10 +122,10 @@ type SLI struct {
 
 // Possible values for ObjectiveStatus.Status.
 const (
-	ObjectiveConditionMet	  = "met"
-	ObjectiveConditionWarning = "warning"
+	ObjectiveConditionMet      = "met"
+	ObjectiveConditionWarning  = "warning"
 	ObjectiveConditionDegraded = "degraded"
-	ObjectiveConditionCritical  = "critical"
+	ObjectiveConditionCritical = "critical"
 	ObjectiveConditionViolated = "violated"
 	ObjectiveConditionUnknown  = "unknown"
 )

@@ -74,6 +74,8 @@ func (m *MockPrometheusClient) CheckConnection(ctx context.Context) error {
 }
 
 // sliErrorRateQuery builds the SLI error rate query string matching the controller format.
+//
+//nolint:unparam // sloNamespace is always "default" in tests but kept for clarity
 func sliErrorRateQuery(objectiveName, sloName, sloNamespace string) string {
 	return fmt.Sprintf(`slok:sli_error_rate:5m{objective_name="%s",slo_name="%s",slo_namespace="%s"}`, objectiveName, sloName, sloNamespace)
 }
@@ -84,6 +86,8 @@ func burnRateQuery(window, objectiveName, sloName, sloNamespace string) string {
 }
 
 // setBurnRateValues sets the same burn rate value for all 6 unique windows.
+//
+//nolint:unparam // sloNamespace is always "default" in tests but kept for clarity
 func setBurnRateValues(mock *MockPrometheusClient, objectiveName, sloName, sloNamespace string, value float64) {
 	for _, window := range []string{"5m", "1h", "6h", "3d", "7d", "30d"} {
 		mock.SLIValues[burnRateQuery(window, objectiveName, sloName, sloNamespace)] = value
