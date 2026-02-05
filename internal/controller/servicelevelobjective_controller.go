@@ -101,135 +101,173 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, err
 	}
 
-	objectiveStatuses := make([]observabilityv1alpha1.ObjectiveStatus, 0)
-
 	logger.Info("init reconcile ServiceLevelObjective", "name", slo.Name)
 
-	for _, obj := range slo.Spec.Objectives {
-		desiredRule, err := prometheus.CreatePrometheusRule(slo.Name, slo.Namespace, obj)
-		if err != nil {
-			logger.Error(err, "unable to create Prometheus rule", "objective_name", obj.Name)
-		} else {
-			existingRule := &monitoringv1.PrometheusRule{}
-			existingRule.Name = desiredRule.Name
-			existingRule.Namespace = desiredRule.Namespace
+	obj := slo.Spec.Objective
+	var objectiveStatus observabilityv1alpha1.ObjectiveStatus
 
-			_, err := controllerutil.CreateOrUpdate(ctx, r.Client, existingRule, func() error {
-				existingRule.Labels = desiredRule.Labels
-				existingRule.Spec = desiredRule.Spec
-				return controllerutil.SetControllerReference(&slo, existingRule, r.Scheme)
-			})
-			if err != nil {
-				logger.Error(err, "unable to create or update Prometheus rule", "prometheus_rule", desiredRule.Name)
-			}
-		}
-		logger.Info("Objective", "name", obj.Name, "target", obj.Target, "window", obj.Window, "sli_query", obj.Sli.Query)
+	desiredRule, err := prometheus.CreatePrometheusRule(slo.Name, slo.Namespace, obj)
+	if err != nil {
+		logger.Error(err, "unable to create Prometheus rule", "objective_name", obj.Name)
+	} else {
+		existingRule := &monitoringv1.PrometheusRule{}
+		existingRule.Name = desiredRule.Name
+		existingRule.Namespace = desiredRule.Namespace
 
-		sliErrorRate5mQuery := fmt.Sprintf("slok:sli_error_rate:5m{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", obj.Name, slo.Name, slo.Namespace)
-		sliErrorRate5m, err := r.PrometheusClient.QuerySLI(ctx, sliErrorRate5mQuery)
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, existingRule, func() error {
+			existingRule.Labels = desiredRule.Labels
+			existingRule.Spec = desiredRule.Spec
+			return controllerutil.SetControllerReference(&slo, existingRule, r.Scheme)
+		})
 		if err != nil {
-			logger.Error(err, "unable to query SLI error rate for 5m window", "sli_query", sliErrorRate5mQuery)
-			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
-				Name:   obj.Name,
-				Target: obj.Target,
-				Actual: 0,
-				Status: observabilityv1alpha1.ObjectiveConditionUnknown,
-				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-					Total:            "unknown",
-					Consumed:         "unknown",
-					Remaining:        "unknown",
-					PercentRemaining: 0,
-				},
-				LastQueried: metav1.Now(),
-			})
-			continue
+			logger.Error(err, "unable to create or update Prometheus rule", "prometheus_rule", desiredRule.Name)
 		}
-		logger.Info("SLI error rate for 5m window", "objective_name", obj.Name, "sli_error_rate_5m", sliErrorRate5m)
-		sliBurnRateWindowedQuery := fmt.Sprintf("slok:burn_rate:%s{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", obj.Window, obj.Name, slo.Name, slo.Namespace)
-		sliBurnRateWindowed, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateWindowedQuery)
-		if err != nil {
-			logger.Error(err, "unable to query SLI burn rate windowed", "sli_query", sliBurnRateWindowedQuery)
-			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
-				Name:   obj.Name,
-				Target: obj.Target,
-				Actual: 0,
-				Status: observabilityv1alpha1.ObjectiveConditionUnknown,
-				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-					Total:            "unknown",
-					Consumed:         "unknown",
-					Remaining:        "unknown",
-					PercentRemaining: 0,
-				},
-				LastQueried: metav1.Now(),
-			})
-			continue
-		}
-		budget, sliValue, err := errorbudget.Calculate(obj, sliBurnRateWindowed, sliErrorRate5m)
-		if err != nil {
-			logger.Error(err, "unable to calculate error budget", "objective_name", obj.Name)
-			objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
-				Name:   obj.Name,
-				Target: obj.Target,
-				Actual: sliValue,
-				Status: observabilityv1alpha1.ObjectiveConditionUnknown,
-				ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-					Total:            "unknown",
-					Consumed:         "unknown",
-					Remaining:        "unknown",
-					PercentRemaining: 0,
-				},
-				LastQueried: metav1.Now(),
-			})
-			continue
-		}
-		var burnRates []burnrate.BurnRate
-		for _, preset := range defaultBurnRatePresets {
-			sliBurnRateShortQuery := fmt.Sprintf("slok:burn_rate:%s{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", preset.ShortWindow, obj.Name, slo.Name, slo.Namespace)
-			sliBurnRateShortLongQuery := fmt.Sprintf("slok:burn_rate:%s{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", preset.LongWindow, obj.Name, slo.Name, slo.Namespace)
-			sliBurnRateShort, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateShortQuery)
-			if err != nil {
-				logger.Error(err, "unable to query SLI for short burn rate", "sli_query", sliBurnRateShortQuery)
-				continue
-			}
-			sliBurnRateLong, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateShortLongQuery)
-			if err != nil {
-				logger.Error(err, "unable to query SLI for long burn rate", "sli_query", sliBurnRateShortLongQuery)
-				continue
-			}
-			burnRates = append(burnRates, burnrate.BurnRate{
-				ShortBurnRate: sliBurnRateShort,
-				LongBurnRate:  sliBurnRateLong,
-				ShortWindow:   preset.ShortWindow,
-				LongWindow:    preset.LongWindow,
-			})
-		}
-		var burnRateStatuses []observabilityv1alpha1.BurnRateStatus
-		status := errorbudget.DetermineStatus(obj.Target, sliValue, budget.PercentRemaining, burnRates)
-		for _, burnRate := range burnRates {
-			logger.Info("Burn rate for objective", "objective_name", obj.Name, "short_window", burnRate.ShortWindow, "long_window", burnRate.LongWindow, "short_burn_rate", burnRate.ShortBurnRate, "long_burn_rate", burnRate.LongBurnRate)
-			burnRateStatuses = append(burnRateStatuses, observabilityv1alpha1.BurnRateStatus{
-				LongBurnRate:  burnRate.LongBurnRate,
-				ShortBurnRate: burnRate.ShortBurnRate,
-				LongWindow:    burnRate.LongWindow,
-				ShortWindow:   burnRate.ShortWindow,
-			})
-		}
-		objectiveStatuses = append(objectiveStatuses, observabilityv1alpha1.ObjectiveStatus{
+	}
+	logger.Info("Objective", "name", obj.Name, "target", obj.Target, "window", obj.Window, "sli_query", obj.Sli.Query)
+
+	sliErrorRate5mQuery := fmt.Sprintf("slok:sli_error_rate:5m{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", obj.Name, slo.Name, slo.Namespace)
+	sliErrorRate5m, err := r.PrometheusClient.QuerySLI(ctx, sliErrorRate5mQuery)
+	if err != nil {
+		logger.Error(err, "unable to query SLI error rate for 5m window", "sli_query", sliErrorRate5mQuery)
+		objectiveStatus = observabilityv1alpha1.ObjectiveStatus{
 			Name:   obj.Name,
 			Target: obj.Target,
-			Actual: math.Round(sliValue*100) / 100,
-			Status: status,
+			Actual: 0,
+			Status: observabilityv1alpha1.ObjectiveConditionUnknown,
 			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-				Total:            budget.Total,
-				Consumed:         budget.Consumed,
-				Remaining:        budget.Remaining,
-				PercentRemaining: budget.PercentRemaining,
+				Total:            "unknown",
+				Consumed:         "unknown",
+				Remaining:        "unknown",
+				PercentRemaining: 0,
 			},
-			BurnRate:    burnRateStatuses,
 			LastQueried: metav1.Now(),
+		}
+		slo.Status.Objective = objectiveStatus
+		slo.Status.LastUpdateTime = metav1.Now()
+		meta.SetStatusCondition(&slo.Status.Conditions, metav1.Condition{
+			Type:   "Available",
+			Status: metav1.ConditionFalse,
+			Reason: "QueryFailed",
+		})
+		if err := r.Status().Update(ctx, &slo); err != nil {
+			logger.Error(err, "Failed to update SLO status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+	}
+	logger.Info("SLI error rate for 5m window", "objective_name", obj.Name, "sli_error_rate_5m", sliErrorRate5m)
+
+	sliBurnRateWindowedQuery := fmt.Sprintf("slok:burn_rate:%s{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", obj.Window, obj.Name, slo.Name, slo.Namespace)
+	sliBurnRateWindowed, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateWindowedQuery)
+	if err != nil {
+		logger.Error(err, "unable to query SLI burn rate windowed", "sli_query", sliBurnRateWindowedQuery)
+		objectiveStatus = observabilityv1alpha1.ObjectiveStatus{
+			Name:   obj.Name,
+			Target: obj.Target,
+			Actual: 0,
+			Status: observabilityv1alpha1.ObjectiveConditionUnknown,
+			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+				Total:            "unknown",
+				Consumed:         "unknown",
+				Remaining:        "unknown",
+				PercentRemaining: 0,
+			},
+			LastQueried: metav1.Now(),
+		}
+		slo.Status.Objective = objectiveStatus
+		slo.Status.LastUpdateTime = metav1.Now()
+		meta.SetStatusCondition(&slo.Status.Conditions, metav1.Condition{
+			Type:   "Available",
+			Status: metav1.ConditionFalse,
+			Reason: "QueryFailed",
+		})
+		if err := r.Status().Update(ctx, &slo); err != nil {
+			logger.Error(err, "Failed to update SLO status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+	}
+
+	budget, sliValue, err := errorbudget.Calculate(obj, sliBurnRateWindowed, sliErrorRate5m)
+	if err != nil {
+		logger.Error(err, "unable to calculate error budget", "objective_name", obj.Name)
+		objectiveStatus = observabilityv1alpha1.ObjectiveStatus{
+			Name:   obj.Name,
+			Target: obj.Target,
+			Actual: 0,
+			Status: observabilityv1alpha1.ObjectiveConditionUnknown,
+			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+				Total:            "unknown",
+				Consumed:         "unknown",
+				Remaining:        "unknown",
+				PercentRemaining: 0,
+			},
+			LastQueried: metav1.Now(),
+		}
+		slo.Status.Objective = objectiveStatus
+		slo.Status.LastUpdateTime = metav1.Now()
+		meta.SetStatusCondition(&slo.Status.Conditions, metav1.Condition{
+			Type:   "Available",
+			Status: metav1.ConditionFalse,
+			Reason: "CalculationFailed",
+		})
+		if err := r.Status().Update(ctx, &slo); err != nil {
+			logger.Error(err, "Failed to update SLO status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+	}
+
+	var burnRates []burnrate.BurnRate
+	for _, preset := range defaultBurnRatePresets {
+		sliBurnRateShortQuery := fmt.Sprintf("slok:burn_rate:%s{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", preset.ShortWindow, obj.Name, slo.Name, slo.Namespace)
+		sliBurnRateShortLongQuery := fmt.Sprintf("slok:burn_rate:%s{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", preset.LongWindow, obj.Name, slo.Name, slo.Namespace)
+		sliBurnRateShort, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateShortQuery)
+		if err != nil {
+			logger.Error(err, "unable to query SLI for short burn rate", "sli_query", sliBurnRateShortQuery)
+			continue
+		}
+		sliBurnRateLong, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateShortLongQuery)
+		if err != nil {
+			logger.Error(err, "unable to query SLI for long burn rate", "sli_query", sliBurnRateShortLongQuery)
+			continue
+		}
+		burnRates = append(burnRates, burnrate.BurnRate{
+			ShortBurnRate: sliBurnRateShort,
+			LongBurnRate:  sliBurnRateLong,
+			ShortWindow:   preset.ShortWindow,
+			LongWindow:    preset.LongWindow,
 		})
 	}
-	slo.Status.Objectives = objectiveStatuses
+
+	var burnRateStatuses []observabilityv1alpha1.BurnRateStatus
+	status := errorbudget.DetermineStatus(obj.Target, sliValue, budget.PercentRemaining, burnRates)
+	for _, br := range burnRates {
+		logger.Info("Burn rate for objective", "objective_name", obj.Name, "short_window", br.ShortWindow, "long_window", br.LongWindow, "short_burn_rate", br.ShortBurnRate, "long_burn_rate", br.LongBurnRate)
+		burnRateStatuses = append(burnRateStatuses, observabilityv1alpha1.BurnRateStatus{
+			LongBurnRate:  br.LongBurnRate,
+			ShortBurnRate: br.ShortBurnRate,
+			LongWindow:    br.LongWindow,
+			ShortWindow:   br.ShortWindow,
+		})
+	}
+
+	objectiveStatus = observabilityv1alpha1.ObjectiveStatus{
+		Name:   obj.Name,
+		Target: obj.Target,
+		Actual: math.Round(sliValue*100) / 100,
+		Status: status,
+		ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
+			Total:            budget.Total,
+			Consumed:         budget.Consumed,
+			Remaining:        budget.Remaining,
+			PercentRemaining: budget.PercentRemaining,
+		},
+		BurnRate:    burnRateStatuses,
+		LastQueried: metav1.Now(),
+	}
+
+	slo.Status.Objective = objectiveStatus
 	slo.Status.LastUpdateTime = metav1.Now()
 
 	meta.SetStatusCondition(&slo.Status.Conditions, metav1.Condition{
