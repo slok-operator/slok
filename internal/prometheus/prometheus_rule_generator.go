@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
+	"github.com/federicolepera/slok/internal/templates"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -75,8 +76,14 @@ func burnRateAlertExpr(sloName, sloNamespace, objectiveName string, preset burnR
 
 func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv1alpha1.Objective) (monitoringv1.PrometheusRule, error) {
 	objectiveName := objective.Name
-	errorQuery := objective.Sli.Query.ErrorQuery
-	totalQuery := objective.Sli.Query.TotalQuery
+
+	// Resolve queries from template or use manual queries
+	resolved, err := templates.Resolve(objective.Sli)
+	if err != nil {
+		return monitoringv1.PrometheusRule{}, fmt.Errorf("failed to resolve SLI queries: %w", err)
+	}
+	errorQuery := resolved.ErrorQuery
+	totalQuery := resolved.TotalQuery
 
 	prometheusRule := monitoringv1.PrometheusRule{
 		ObjectMeta: metav1.ObjectMeta{
