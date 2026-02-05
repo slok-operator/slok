@@ -2,6 +2,7 @@ package prometheus
 
 import (
 	"fmt"
+	"strings"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
 	"github.com/federicolepera/slok/internal/templates"
@@ -82,8 +83,6 @@ func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv
 	if err != nil {
 		return monitoringv1.PrometheusRule{}, fmt.Errorf("failed to resolve SLI queries: %w", err)
 	}
-	errorQuery := resolved.ErrorQuery
-	totalQuery := resolved.TotalQuery
 
 	prometheusRule := monitoringv1.PrometheusRule{
 		ObjectMeta: metav1.ObjectMeta{
@@ -106,9 +105,17 @@ func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv
 
 	// SLI error rate recording rules for each window
 	for _, window := range recordingWindows {
+		var expr string
+		if resolved.IsRawExpression() {
+			// Use raw expression with window placeholder replaced
+			expr = strings.ReplaceAll(resolved.RawExpr, "{{window}}", window)
+		} else {
+			// Use standard error/total rate calculation
+			expr = sliErrorRateExpr(resolved.ErrorQuery, resolved.TotalQuery, window)
+		}
 		*rules = append(*rules, monitoringv1.Rule{
 			Record: fmt.Sprintf("slok:sli_error_rate:%s", window),
-			Expr:   intstr.FromString(sliErrorRateExpr(errorQuery, totalQuery, window)),
+			Expr:   intstr.FromString(expr),
 			Labels: baseLabels(sloName, sloNamespace, objectiveName, window),
 		})
 	}

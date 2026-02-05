@@ -9,16 +9,34 @@ import (
 
 // Template names
 const (
-	HTTPAvailability = "http-availability"
-	// Future templates:
-	// GRPCAvailability = "grpc-availability"
-	// HTTPLatency      = "http-latency"
+	HTTPAvailability    = "http-availability"
+	HTTPLatency         = "http-latency"
+	KubernetesAPIServer = "kubernetes-apiserver"
 )
 
-// ResolvedQuery holds the resolved totalQuery and errorQuery from a template
+// ResolvedQuery holds the resolved queries from a template.
+// For simple templates (http-availability), TotalQuery and ErrorQuery are metric selectors.
+// For complex templates (http-latency), RawExpr contains the full PromQL expression
+// with {{window}} placeholder that will be replaced by the actual window.
 type ResolvedQuery struct {
+	// TotalQuery is the Prometheus metric selector for total events.
+	// Used when RawExpr is empty.
 	TotalQuery string
+
+	// ErrorQuery is the Prometheus metric selector for error events.
+	// Used when RawExpr is empty.
 	ErrorQuery string
+
+	// RawExpr is a complete PromQL expression for the SLI error rate.
+	// Contains {{window}} placeholder that will be replaced by the actual window (e.g., "5m").
+	// When set, TotalQuery and ErrorQuery are ignored.
+	RawExpr string
+}
+
+// IsRawExpression returns true if this resolved query uses a raw PromQL expression
+// instead of simple metric selectors.
+func (r ResolvedQuery) IsRawExpression() bool {
+	return r.RawExpr != ""
 }
 
 // Resolve takes an SLI and returns the resolved queries.
@@ -47,6 +65,10 @@ func resolveTemplate(template observabilityv1alpha1.TemplateStruct) (ResolvedQue
 	switch template.Name {
 	case HTTPAvailability:
 		return httpAvailabilityTemplate(template.Labels)
+	case HTTPLatency:
+		return httpLatencyTemplate(template.Labels, template.Params)
+	case KubernetesAPIServer:
+		return kubernetesAPIServerTemplate(template.Labels, template.Params)
 	default:
 		return ResolvedQuery{}, fmt.Errorf("unknown template: %s", template.Name)
 	}
@@ -67,11 +89,6 @@ func resolveTemplate(template observabilityv1alpha1.TemplateStruct) (ResolvedQue
 //	  name: http-availability
 //	  labels:
 //	    service: "payment-api"
-//	    namespace: "production"
-//
-// Generates:
-//   - totalQuery: http_requests_total{service="payment-api",namespace="production"}
-//   - errorQuery: http_requests_total{service="payment-api",namespace="production",status=~"5.."}
 func httpAvailabilityTemplate(labels map[string]string) (ResolvedQuery, error) {
 	labelSelector := buildLabelSelector(labels)
 
@@ -82,6 +99,113 @@ func httpAvailabilityTemplate(labels map[string]string) (ResolvedQuery, error) {
 	if labelSelector == "" {
 		totalQuery = "http_requests_total"
 		errorQuery = `http_requests_total{status=~"5.."}`
+	}
+
+	return ResolvedQuery{
+		TotalQuery: totalQuery,
+		ErrorQuery: errorQuery,
+	}, nil
+}
+
+// httpLatencyTemplate generates a raw PromQL expression for HTTP latency SLI.
+//
+// This template measures the ratio of slow requests (above threshold) to total requests.
+// It uses histogram buckets to determine fast vs slow requests.
+//
+// Required params:
+//   - threshold: latency threshold in seconds (e.g., "0.5" for 500ms)
+//
+// Generated expression (error rate = 1 - fast_ratio):
+//
+//	1 - (
+//	  sum(rate(http_request_duration_seconds_bucket{labels,le="threshold"}[{{window}}]))
+//	  /
+//	  clamp_min(sum(rate(http_request_duration_seconds_count{labels}[{{window}}])), 1e-12)
+//	)
+//
+// Example usage:
+//
+//	template:
+//	  name: http-latency
+//	  labels:
+//	    service: "payment-api"
+//	  params:
+//	    threshold: "0.5"
+func httpLatencyTemplate(labels map[string]string, params map[string]string) (ResolvedQuery, error) {
+	threshold, ok := params["threshold"]
+	if !ok || threshold == "" {
+		return ResolvedQuery{}, fmt.Errorf("http-latency template requires 'threshold' param (e.g., \"0.5\" for 500ms)")
+	}
+
+	labelSelector := buildLabelSelector(labels)
+
+	var bucketSelector, countSelector string
+	if labelSelector == "" {
+		bucketSelector = fmt.Sprintf(`le="%s"`, threshold)
+		countSelector = ""
+	} else {
+		bucketSelector = fmt.Sprintf(`%s,le="%s"`, labelSelector, threshold)
+		countSelector = labelSelector
+	}
+
+	// Build the raw expression with {{window}} placeholder
+	// error_rate = 1 - (fast / total)
+	rawExpr := fmt.Sprintf(
+		`1 - (sum(rate(http_request_duration_seconds_bucket{%s}[{{window}}])) / clamp_min(sum(rate(http_request_duration_seconds_count{%s}[{{window}}])), 1e-12))`,
+		bucketSelector,
+		countSelector,
+	)
+
+	// Handle empty count selector
+	if countSelector == "" {
+		rawExpr = fmt.Sprintf(
+			`1 - (sum(rate(http_request_duration_seconds_bucket{%s}[{{window}}])) / clamp_min(sum(rate(http_request_duration_seconds_count[{{window}}])), 1e-12))`,
+			bucketSelector,
+		)
+	}
+
+	return ResolvedQuery{
+		RawExpr: rawExpr,
+	}, nil
+}
+
+// kubernetesAPIServerTemplate generates queries for Kubernetes API server availability SLI.
+//
+// This template measures the ratio of successful API server requests to total requests.
+// It uses the standard apiserver_request_total metric.
+//
+// Optional params:
+//   - errorCodes: regex pattern for error status codes (default: "5..")
+//
+// Generated queries:
+//   - totalQuery: apiserver_request_total{labels...}
+//   - errorQuery: apiserver_request_total{labels..., code=~"errorCodes"}
+//
+// Example usage:
+//
+//	template:
+//	  name: kubernetes-apiserver
+//	  labels:
+//	    verb: "GET"
+//	    resource: "pods"
+//	  params:
+//	    errorCodes: "5.."
+func kubernetesAPIServerTemplate(labels map[string]string, params map[string]string) (ResolvedQuery, error) {
+	labelSelector := buildLabelSelector(labels)
+
+	// Default error codes to 5xx
+	errorCodes := params["errorCodes"]
+	if errorCodes == "" {
+		errorCodes = "5.."
+	}
+
+	var totalQuery, errorQuery string
+	if labelSelector == "" {
+		totalQuery = "apiserver_request_total"
+		errorQuery = fmt.Sprintf(`apiserver_request_total{code=~"%s"}`, errorCodes)
+	} else {
+		totalQuery = fmt.Sprintf("apiserver_request_total{%s}", labelSelector)
+		errorQuery = fmt.Sprintf(`apiserver_request_total{%s,code=~"%s"}`, labelSelector, errorCodes)
 	}
 
 	return ResolvedQuery{
@@ -109,6 +233,8 @@ func buildLabelSelector(labels map[string]string) string {
 func AvailableTemplates() []string {
 	return []string{
 		HTTPAvailability,
+		HTTPLatency,
+		KubernetesAPIServer,
 	}
 }
 
