@@ -118,8 +118,8 @@ type Query struct {
 
 type TemplateStruct struct {
 	// name is the name of the template to use for this SLI.
-	// Available templates: http-availability
-	// +kubebuilder:validation:Enum=http-availability
+	// Available templates: http-availability, http-latency, kubernetes-apiserver
+	// +kubebuilder:validation:Enum=http-availability;http-latency;kubernetes-apiserver
 	// +optional
 	Name string `json:"name,omitempty"`
 
@@ -127,6 +127,11 @@ type TemplateStruct struct {
 	// Example: {"service": "payment-api", "namespace": "production"}
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// params are template-specific parameters.
+	// For http-latency: threshold (e.g., "0.5" for 500ms)
+	// +optional
+	Params map[string]string `json:"params,omitempty"`
 }
 
 // SLI (Service Level Indicator) defines how the objective is measured.
