@@ -4,6 +4,33 @@ All notable changes to the SLOK project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+#### SLI Templates
+- Built-in templates for common SLI patterns that generate PromQL automatically:
+  - `http-availability`: HTTP request success rate (non-5xx responses) using `http_requests_total`
+  - `http-latency`: HTTP request latency using histogram buckets with configurable `threshold` parameter
+  - `kubernetes-apiserver`: Kubernetes API server availability using `apiserver_request_total` with configurable `errorCodes` parameter
+- Template resolution engine in `internal/templates/` package
+- `RawExpr` support for complex PromQL expressions with `{{window}}` placeholder (used by `http-latency`)
+- Zero-traffic safety in all template-generated queries using `clamp_min(..., 1e-12)`
+- `Params` field added to `TemplateStruct` for template-specific configuration
+- Comprehensive test coverage for all templates (21 tests)
+
+### Changed
+
+- Refactored `prometheus_rule_generator.go` to use helper functions and loops, reducing code duplication
+- Updated README with SLI Templates documentation and examples
+- Removed "Manual PromQL required" from limitations (templates are now available)
+
+### Fixed
+
+- Fixed ineffassign lint issue in controller reconciliation loop
+- Fixed comment spacing issues in burnrate calculator
+- Fixed gofmt formatting in types.go
+
 ## [v0.2.0] - 2026-02-04
 
 ### Added
@@ -153,4 +180,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fixed 1-minute reconciliation interval (not configurable per-SLO)
 - Single-cluster support only
 - No built-in alerting (relies on PrometheusRule)
-- Manual PromQL required (no query templates or builders)

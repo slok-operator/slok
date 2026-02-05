@@ -99,9 +99,109 @@ kubectl get pods -n slok-system
 kubectl get crd servicelevelobjectives.observability.slok.io
 ```
 
+## SLI Templates
+
+SLOK provides built-in templates for common SLI patterns, eliminating the need to write raw PromQL. Templates automatically generate the correct queries with zero-traffic safety.
+
+### Available Templates
+
+| Template | Description | Required Params |
+|----------|-------------|-----------------|
+| `http-availability` | HTTP request success rate (non-5xx) | - |
+| `http-latency` | HTTP request latency (histogram-based) | `threshold` |
+| `kubernetes-apiserver` | Kubernetes API server availability | - |
+
+### http-availability
+
+Measures the ratio of successful HTTP requests (non-5xx) to total requests using `http_requests_total`.
+
+```yaml
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: payment-api-availability
+spec:
+  displayName: "Payment API Availability"
+  objectives:
+    - name: availability
+      target: 99.9
+      window: 30d
+      sli:
+        template:
+          name: http-availability
+          labels:
+            service: "payment-api"
+```
+
+Generated queries:
+- `totalQuery`: `http_requests_total{service="payment-api"}`
+- `errorQuery`: `http_requests_total{service="payment-api",status=~"5.."}`
+
+### http-latency
+
+Measures the ratio of slow requests (above threshold) to total requests using histogram buckets.
+
+```yaml
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: checkout-latency
+spec:
+  displayName: "Checkout Latency"
+  objectives:
+    - name: latency-500ms
+      target: 95.0        # 95% of requests should be under 500ms
+      window: 7d
+      sli:
+        template:
+          name: http-latency
+          labels:
+            service: "checkout"
+          params:
+            threshold: "0.5"  # 500ms in seconds
+```
+
+Generated expression:
+```promql
+1 - (
+  sum(rate(http_request_duration_seconds_bucket{service="checkout",le="0.5"}[WINDOW]))
+  /
+  clamp_min(sum(rate(http_request_duration_seconds_count{service="checkout"}[WINDOW])), 1e-12)
+)
+```
+
+### kubernetes-apiserver
+
+Measures the ratio of successful Kubernetes API server requests to total requests using `apiserver_request_total`.
+
+```yaml
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: apiserver-availability
+spec:
+  displayName: "API Server Availability"
+  objectives:
+    - name: availability
+      target: 99.9
+      window: 30d
+      sli:
+        template:
+          name: kubernetes-apiserver
+          labels:
+            verb: "GET"
+            resource: "pods"
+          params:
+            errorCodes: "5.."  # Optional, defaults to "5.."
+```
+
+Generated queries:
+- `totalQuery`: `apiserver_request_total{verb="GET",resource="pods"}`
+- `errorQuery`: `apiserver_request_total{verb="GET",resource="pods",code=~"5.."}`
+
 ## Examples
 
-### Availability SLO
+### Availability SLO (using template)
 
 Track the error rate of HTTP requests:
 
@@ -117,24 +217,38 @@ spec:
       target: 99.9        # Target: 99.9% non-error requests
       window: 30d         # Over a 30-day rolling window
       sli:
+        template:
+          name: http-availability
+          labels:
+            service: "payment-api"
+```
+
+### Availability SLO (manual queries)
+
+If you need custom queries, you can still use manual PromQL:
+
+```yaml
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: payment-api-availability
+spec:
+  displayName: "Payment API Availability"
+  objectives:
+    - name: availability
+      target: 99.9
+      window: 30d
+      sli:
         query:
           totalQuery: http_requests_total{service="payment-api"}
           errorQuery: http_requests_total{service="payment-api", status=~"5.."}
 ```
 
-### Latency SLO
+### Latency SLO (using template)
 
-Track the percentage of requests above a latency threshold. For histogram-based
-latency SLOs, create a recording rule that computes slow requests and reference it
-as the error metric:
+Track the percentage of requests above a latency threshold:
 
 ```yaml
-# Prerequisite: create a recording rule for slow requests
-# - record: http_request_slow_total
-#   expr: |
-#     http_request_duration_seconds_count{service="checkout"}
-#     - http_request_duration_seconds_bucket{service="checkout", le="0.5"}
-
 apiVersion: observability.slok.io/v1alpha1
 kind: ServiceLevelObjective
 metadata:
@@ -142,13 +256,16 @@ metadata:
 spec:
   displayName: "Checkout Latency"
   objectives:
-    - name: p99-latency
-      target: 95.0        # 95% of requests should be under threshold
+    - name: p95-latency
+      target: 95.0        # 95% of requests should be under 500ms
       window: 7d
       sli:
-        query:
-          totalQuery: http_request_duration_seconds_count{service="checkout"}
-          errorQuery: http_request_slow_total{service="checkout"}
+        template:
+          name: http-latency
+          labels:
+            service: "checkout"
+          params:
+            threshold: "0.5"
 ```
 
 ### Multiple Objectives
@@ -414,20 +531,23 @@ it is being consumed. Using both gives you coverage for slow, sustained degradat
 
 | Limitation | Description | Workaround |
 |------------|-------------|------------|
-| **Manual PromQL required** | No query templates or builders | Write metric selectors directly in the spec |
 | **Instant queries only** | Uses Prometheus instant query for status, recording rules for SLI | Recording rules handle the rate/window computation |
 | **No multi-cluster support** | One operator per cluster | Deploy SLOK in each cluster |
 | **Fixed reconciliation interval** | SLOs are re-evaluated every 1 minute | Cannot be configured per-SLO |
 | **Prometheus Operator required for alerts** | PrometheusRule generation requires the Prometheus Operator CRDs | Install the Prometheus Operator or disable alerting |
-| **Histogram latency SLOs** | Cannot express "slow requests" as a single metric selector | Create a recording rule for slow request count |
 
 ### Query Requirements
 
-The SLI is defined by two Prometheus metric selectors: `errorQuery` (error events)
+You can define SLIs using either **templates** (recommended) or **manual queries**.
+
+**Using templates** (recommended): Select a template and provide labels to filter metrics.
+SLOK generates the correct PromQL automatically with zero-traffic safety.
+
+**Using manual queries**: Define two Prometheus metric selectors: `errorQuery` (error events)
 and `totalQuery` (total events). SLOK generates recording rules that compute the
 error rate for multiple time windows.
 
-Each field should contain a **metric selector** (metric name with optional label
+Each manual query field should contain a **metric selector** (metric name with optional label
 matchers). The operator wraps these in `sum(rate(...[window]))` when generating
 recording rules. Do **not** include `sum()`, `rate()`, or `increase()` in the queries.
 
