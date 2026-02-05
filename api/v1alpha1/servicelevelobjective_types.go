@@ -193,10 +193,9 @@ type ServiceLevelObjectiveSpec struct {
 	// +required
 	DisplayName string `json:"displayName"`
 
-	// objectives is a list of individual objectives that make up the Service Level Objective.
-	// +kubebuilder:validation:MinItems=1
+	// objectives defines the objective for this Service Level Objective.
 	// +required
-	Objectives []Objective `json:"objectives"`
+	Objective Objective `json:"objective"`
 }
 
 // ErrorBudgetStatus represents error budget consumption
@@ -260,7 +259,7 @@ type ObjectiveStatus struct {
 type ServiceLevelObjectiveStatus struct {
 	// objectives represent the current status of each objective defined in the spec.
 	// +optional
-	Objectives []ObjectiveStatus `json:"objectives,omitempty"`
+	Objective ObjectiveStatus `json:"objective,omitempty"`
 
 	// lastUpdateTime indicates the last time the status was updated.
 	// +optional
@@ -284,10 +283,10 @@ type ServiceLevelObjectiveStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=slo
 // +kubebuilder:printcolumn:name="Display Name",type=string,JSONPath=`.spec.displayName`
-// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.objectives[0].status`
-// +kubebuilder:printcolumn:name="Actual",type=number,JSONPath=`.status.objectives[0].actual`,format=float
-// +kubebuilder:printcolumn:name="Target",type=number,JSONPath=`.status.objectives[0].target`,format=float
-// +kubebuilder:printcolumn:name="Budget %",type=number,JSONPath=`.status.objectives[0].errorBudget.percentRemaining`,format=float
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.objective.status`
+// +kubebuilder:printcolumn:name="Actual",type=number,JSONPath=`.status.objective.actual`,format=float
+// +kubebuilder:printcolumn:name="Target",type=number,JSONPath=`.status.objective.target`,format=float
+// +kubebuilder:printcolumn:name="Budget %",type=number,JSONPath=`.status.objective.errorBudget.percentRemaining`,format=float
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // ServiceLevelObjective is the Schema for the servicelevelobjectives API
