@@ -21,14 +21,14 @@ metadata:
   name: my-api-availability
 spec:
   displayName: "My API Availability"
-  objectives:
-    - name: availability
-      target: 99.9
-      window: 7d
-      sli:
-        query:
-          totalQuery: http_requests_total
-          errorQuery: http_requests_total{status=~"5.."}
+  objective:
+    name: availability
+    target: 99.9
+    window: 7d
+    sli:
+      query:
+        totalQuery: http_requests_total
+        errorQuery: http_requests_total{status=~"5.."}
 EOF
 
 # 3. Check the status
@@ -122,15 +122,15 @@ metadata:
   name: payment-api-availability
 spec:
   displayName: "Payment API Availability"
-  objectives:
-    - name: availability
-      target: 99.9
-      window: 30d
-      sli:
-        template:
-          name: http-availability
-          labels:
-            service: "payment-api"
+  objective:
+    name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      template:
+        name: http-availability
+        labels:
+          service: "payment-api"
 ```
 
 Generated queries:
@@ -148,17 +148,17 @@ metadata:
   name: checkout-latency
 spec:
   displayName: "Checkout Latency"
-  objectives:
-    - name: latency-500ms
-      target: 95.0        # 95% of requests should be under 500ms
-      window: 7d
-      sli:
-        template:
-          name: http-latency
-          labels:
-            service: "checkout"
-          params:
-            threshold: "0.5"  # 500ms in seconds
+  objective:
+    name: latency-500ms
+    target: 95.0        # 95% of requests should be under 500ms
+    window: 7d
+    sli:
+      template:
+        name: http-latency
+        labels:
+          service: "checkout"
+        params:
+          threshold: "0.5"  # 500ms in seconds
 ```
 
 Generated expression:
@@ -181,18 +181,18 @@ metadata:
   name: apiserver-availability
 spec:
   displayName: "API Server Availability"
-  objectives:
-    - name: availability
-      target: 99.9
-      window: 30d
-      sli:
-        template:
-          name: kubernetes-apiserver
-          labels:
-            verb: "GET"
-            resource: "pods"
-          params:
-            errorCodes: "5.."  # Optional, defaults to "5.."
+  objective:
+    name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      template:
+        name: kubernetes-apiserver
+        labels:
+          verb: "GET"
+          resource: "pods"
+        params:
+          errorCodes: "5.."  # Optional, defaults to "5.."
 ```
 
 Generated queries:
@@ -212,15 +212,15 @@ metadata:
   name: payment-api-availability
 spec:
   displayName: "Payment API Availability"
-  objectives:
-    - name: availability
-      target: 99.9        # Target: 99.9% non-error requests
-      window: 30d         # Over a 30-day rolling window
-      sli:
-        template:
-          name: http-availability
-          labels:
-            service: "payment-api"
+  objective:
+    name: availability
+    target: 99.9        # Target: 99.9% non-error requests
+    window: 30d         # Over a 30-day rolling window
+    sli:
+      template:
+        name: http-availability
+        labels:
+          service: "payment-api"
 ```
 
 ### Availability SLO (manual queries)
@@ -234,14 +234,14 @@ metadata:
   name: payment-api-availability
 spec:
   displayName: "Payment API Availability"
-  objectives:
-    - name: availability
-      target: 99.9
-      window: 30d
-      sli:
-        query:
-          totalQuery: http_requests_total{service="payment-api"}
-          errorQuery: http_requests_total{service="payment-api", status=~"5.."}
+  objective:
+    name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      query:
+        totalQuery: http_requests_total{service="payment-api"}
+        errorQuery: http_requests_total{service="payment-api", status=~"5.."}
 ```
 
 ### Latency SLO (using template)
@@ -255,46 +255,17 @@ metadata:
   name: checkout-latency
 spec:
   displayName: "Checkout Latency"
-  objectives:
-    - name: p95-latency
-      target: 95.0        # 95% of requests should be under 500ms
-      window: 7d
-      sli:
-        template:
-          name: http-latency
-          labels:
-            service: "checkout"
-          params:
-            threshold: "0.5"
-```
-
-### Multiple Objectives
-
-Define multiple objectives in a single SLO:
-
-```yaml
-apiVersion: observability.slok.io/v1alpha1
-kind: ServiceLevelObjective
-metadata:
-  name: api-gateway-slo
-spec:
-  displayName: "API Gateway SLO"
-  objectives:
-    - name: availability
-      target: 99.95
-      window: 30d
-      sli:
-        query:
-          totalQuery: http_requests_total{job="api-gateway"}
-          errorQuery: http_requests_total{job="api-gateway", status=~"5.."}
-
-    - name: error-rate
-      target: 99.0
-      window: 30d
-      sli:
-        query:
-          totalQuery: grpc_server_handled_total{job="api-gateway"}
-          errorQuery: grpc_server_handled_total{job="api-gateway", grpc_code!="OK"}
+  objective:
+    name: p95-latency
+    target: 95.0        # 95% of requests should be under 500ms
+    window: 7d
+    sli:
+      template:
+        name: http-latency
+        labels:
+          service: "checkout"
+        params:
+          threshold: "0.5"
 ```
 
 ### Check SLO Status
@@ -319,34 +290,34 @@ kubectl get slo payment-api-availability -o yaml
 Output:
 ```yaml
 status:
-  objectives:
-    - name: availability
-      target: 99.9
-      actual: 99.87
-      status: violated      # met | warning | degraded | critical | violated | unknown
-      errorBudget:
-        total: "43.2m"
-        consumed: "56.2m"
-        remaining: "0.0m"
-        percentRemaining: 0.0
-      burnRate:
-        - shortWindow: "5m"
-          shortBurnRate: 0.48
-          longWindow: "1h"
-          longBurnRate: 0.5
-        - shortWindow: "1h"
-          shortBurnRate: 0.31
-          longWindow: "6h"
-          longBurnRate: 0.33
-        - shortWindow: "6h"
-          shortBurnRate: 0.1
-          longWindow: "3d"
-          longBurnRate: 0.12
-        - shortWindow: "7d"
-          shortBurnRate: 0.05
-          longWindow: "30d"
-          longBurnRate: 0.06
-      lastQueried: "2026-01-28T10:30:00Z"
+  objective:
+    name: availability
+    target: 99.9
+    actual: 99.87
+    status: violated      # met | warning | degraded | critical | violated | unknown
+    errorBudget:
+      total: "43.2m"
+      consumed: "56.2m"
+      remaining: "0.0m"
+      percentRemaining: 0.0
+    burnRate:
+      - shortWindow: "5m"
+        shortBurnRate: 0.48
+        longWindow: "1h"
+        longBurnRate: 0.5
+      - shortWindow: "1h"
+        shortBurnRate: 0.31
+        longWindow: "6h"
+        longBurnRate: 0.33
+      - shortWindow: "6h"
+        shortBurnRate: 0.1
+        longWindow: "3d"
+        longBurnRate: 0.12
+      - shortWindow: "7d"
+        shortBurnRate: 0.05
+        longWindow: "30d"
+        longBurnRate: 0.06
+    lastQueried: "2026-01-28T10:30:00Z"
   lastUpdateTime: "2026-01-28T10:30:00Z"
   conditions:
     - type: Available
@@ -396,24 +367,24 @@ When `budgetErrorAlerts.enabled` is `true`, SLOK creates two default rules:
 You can also add custom thresholds via `budgetErrorAlerts.alerts`:
 
 ```yaml
-objectives:
-  - name: availability
-    target: 99.9
-    window: 30d
-    sli:
-      query:
-        totalQuery: http_requests_total{service="payment-api"}
-        errorQuery: http_requests_total{service="payment-api", status=~"5.."}
-    alerting:
-      budgetErrorAlerts:
-        enabled: true
-        alerts:
-          - name: SLOBudgetWarning
-            percent: 20        # fires when remaining budget < 20%
-            severity: warning
-          - name: SLOBudgetCritical
-            percent: 5         # fires when remaining budget < 5%
-            severity: critical
+objective:
+  name: availability
+  target: 99.9
+  window: 30d
+  sli:
+    query:
+      totalQuery: http_requests_total{service="payment-api"}
+      errorQuery: http_requests_total{service="payment-api", status=~"5.."}
+  alerting:
+    budgetErrorAlerts:
+      enabled: true
+      alerts:
+        - name: SLOBudgetWarning
+          percent: 20        # fires when remaining budget < 20%
+          severity: warning
+        - name: SLOBudgetCritical
+          percent: 5         # fires when remaining budget < 5%
+          severity: critical
 ```
 
 ### Burn Rate Alerts
@@ -469,30 +440,30 @@ You can also define custom burn rate alerts via `burnRateAlerts.alerts`:
 Example configuration with two severity tiers:
 
 ```yaml
-objectives:
-  - name: availability
-    target: 99.9
-    window: 30d
-    sli:
-      query:
-        totalQuery: http_requests_total{service="payment-api"}
-        errorQuery: http_requests_total{service="payment-api", status=~"5.."}
-    alerting:
-      burnRateAlerts:
-        enabled: true
-        alerts:
-          - name: HighBurnRate
-            consumePercent: 2       # 2% of budget consumed in 1h
-            consumeWindow: 1h
-            longWindow: 1h
-            shortWindow: 5m
-            severity: critical
-          - name: MediumBurnRate
-            consumePercent: 5       # 5% of budget consumed in 6h
-            consumeWindow: 6h
-            longWindow: 6h
-            shortWindow: 30m
-            severity: warning
+objective:
+  name: availability
+  target: 99.9
+  window: 30d
+  sli:
+    query:
+      totalQuery: http_requests_total{service="payment-api"}
+      errorQuery: http_requests_total{service="payment-api", status=~"5.."}
+  alerting:
+    burnRateAlerts:
+      enabled: true
+      alerts:
+        - name: HighBurnRate
+          consumePercent: 2       # 2% of budget consumed in 1h
+          consumeWindow: 1h
+          longWindow: 1h
+          shortWindow: 5m
+          severity: critical
+        - name: MediumBurnRate
+          consumePercent: 5       # 5% of budget consumed in 6h
+          consumeWindow: 6h
+          longWindow: 6h
+          shortWindow: 30m
+          severity: warning
 ```
 
 The burn rate threshold is calculated as:
