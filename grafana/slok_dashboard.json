@@ -59,7 +59,7 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 7,
+        "w": 4,
         "x": 0,
         "y": 1
       },
@@ -85,8 +85,8 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
-          "editorMode": "builder",
-          "expr": "count(slok_slo_objective_percent_remaining)",
+          "editorMode": "code",
+          "expr": "count(slok:sli_error_rate:5m) or vector(0)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -132,11 +132,11 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 7,
-        "x": 7,
+        "w": 4,
+        "x": 4,
         "y": 1
       },
-      "id": 4,
+      "id": 21,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -158,13 +158,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "count(slok_slo_objective_status{status=\"at-risk\"}) or vector(0)",
+          "expr": "count(\n  (slok:burn_rate:6h > 1) and on(slo_name, slo_namespace, objective_name) (slok:burn_rate:3d > 1)\n) or vector(0)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "At Risk",
+      "title": "Warning",
       "type": "stat"
     },
     {
@@ -200,8 +200,8 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 7,
-        "x": 14,
+        "w": 4,
+        "x": 8,
         "y": 1
       },
       "id": 5,
@@ -226,7 +226,143 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "count(slok_slo_objective_status{status=\"violated\"}) or vector(0)",
+          "expr": "count(\n  (slok:burn_rate:1h > 6) and on(slo_name, slo_namespace, objective_name) (slok:burn_rate:6h > 6)\n) or vector(0)",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Degraded",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dfbml09r9gh6of"
+      },
+      "description": "Number of SLO objectives at risk",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "id": 20,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "count(\n  (slok:burn_rate:5m > 14) and on(slo_name, slo_namespace, objective_name) (slok:burn_rate:1h > 14)\n) or vector(0)",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Critical",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dfbml09r9gh6of"
+      },
+      "description": "Number of SLO objectives at risk",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "dark-red",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "count(\n  slok:sli_error_rate:30d > on(slo_name, slo_namespace, objective_name) slok:error_budget_target\n) or vector(0)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -245,8 +381,8 @@
       },
       "id": 13,
       "panels": [],
-      "repeat": "slo_id",
-      "title": "$slo_id",
+      "repeat": "slo_objective_id",
+      "title": "$slo_objective_id",
       "type": "row"
     },
     {
@@ -302,7 +438,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "slok_slo_objective_target{objective_id=\"$slo_id\"}",
+          "expr": "100 - (slok:error_budget_target{objective_id=\"$slo_objective_id\"} * 100)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -319,7 +455,8 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "thresholds",
+            "seriesBy": "last"
           },
           "custom": {
             "axisBorderShow": false,
@@ -327,6 +464,8 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisSoftMax": 100,
+            "axisSoftMin": 98,
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
@@ -357,24 +496,13 @@
           },
           "decimals": 2,
           "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "dark-red",
+                "color": "blue",
                 "value": 0
-              },
-              {
-                "color": "dark-orange",
-                "value": 20
-              },
-              {
-                "color": "#EAB839",
-                "value": 40
-              },
-              {
-                "color": "semi-dark-blue",
-                "value": 60
               }
             ]
           },
@@ -383,10 +511,14 @@
         "overrides": [
           {
             "matcher": {
-              "id": "byName",
-              "options": "slok_slo_objective_target"
+              "id": "byFrameRefID",
+              "options": "B"
             },
             "properties": [
+              {
+                "id": "custom.fillBelowTo",
+                "value": "Value"
+              },
               {
                 "id": "thresholds",
                 "value": {
@@ -398,22 +530,14 @@
                     }
                   ]
                 }
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 2
-              },
-              {
-                "id": "custom.fillBelowTo",
-                "value": "slok_slo_objective_target"
               }
             ]
           }
         ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 17,
+        "h": 8,
+        "w": 16,
         "x": 5,
         "y": 7
       },
@@ -433,11 +557,12 @@
         }
       },
       "pluginVersion": "12.3.1",
-      "repeatDirection": "v",
+      "repeat": "slo_objective_id",
+      "repeatDirection": "h",
       "targets": [
         {
           "editorMode": "code",
-          "expr": "slok_slo_objective_actual{objective_id=\"$slo_id\"}",
+          "expr": "100.0 - (slok:sli_error_rate:5m{objective_id=\"$slo_objective_id\"} * 100)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -449,7 +574,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "slok_slo_objective_target{objective_id=\"$slo_id\"}",
+          "expr": "100 - (slok:error_budget_target{objective_id=\"$slo_objective_id\"} * 100)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -459,7 +584,7 @@
           "refId": "B"
         }
       ],
-      "title": "Objective ID: $slo_id Real-Time",
+      "title": "Objective ID: $slo_objective_id",
       "type": "timeseries"
     },
     {
@@ -478,8 +603,20 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "dark-red",
                 "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "yellow",
+                "value": 40
+              },
+              {
+                "color": "green",
+                "value": 60
               }
             ]
           }
@@ -515,13 +652,91 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "slok_slo_objective_percent_remaining{objective_id=\"$slo_id\"}",
+          "expr": "clamp_min(\n  100 - (slok:burn_rate:30d{objective_id=\"$slo_objective_id\"} * 100),\n  0\n)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
       "title": "Objective Error Budget Remaining",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dfbml09r9gh6of"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 20
+              },
+              {
+                "color": "yellow",
+                "value": 40
+              },
+              {
+                "color": "orange",
+                "value": 60
+              },
+              {
+                "color": "dark-red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 0,
+        "y": 13
+      },
+      "id": 22,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "(slok:burn_rate:30d{objective_id=\"$slo_objective_id\"} * 100)",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Current burned budget",
       "type": "stat"
     },
     {
@@ -571,6 +786,7 @@
           "decimals": 2,
           "mappings": [],
           "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -582,42 +798,13 @@
           },
           "unit": "percent"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "slok_slo_objective_target"
-            },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "yellow",
-                      "value": 0
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 2
-              },
-              {
-                "id": "custom.fillBelowTo",
-                "value": "slok_slo_objective_target"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 17,
+        "w": 16,
         "x": 5,
-        "y": 16
+        "y": 15
       },
       "id": 19,
       "options": {
@@ -637,18 +824,96 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "slok_slo_objective_percent_remaining{objective_id=\"$slo_id\"}",
+          "expr": "clamp_min(\n  100 - (slok:burn_rate:30d{objective_id=\"$slo_objective_id\"} * 100),\n  0\n)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Objective ID: $slo_id ErrorBudget Remaining",
+      "title": "Objective ID: $slo_objective_id ErrorBudget Remaining",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "dfbml09r9gh6of"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "orange",
+                "value": 7
+              },
+              {
+                "color": "dark-red",
+                "value": 14
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 0,
+        "y": 16
+      },
+      "id": 23,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "(slok:burn_rate:5m{objective_id=\"$slo_objective_id\"} * 100)",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Burn Rate in last 5 minutes",
+      "type": "stat"
     }
   ],
   "preload": false,
-  "refresh": "5s",
+  "refresh": "30s",
   "schemaVersion": 42,
   "tags": [
     "slo",
@@ -662,87 +927,26 @@
     "list": [
       {
         "current": {
-          "text": "",
-          "value": ""
-        },
-        "definition": "label_values(optimization_request_objective_percent_remaining,service_level_objective)",
-        "description": "",
-        "includeAll": false,
-        "name": "slo_name",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(optimization_request_objective_percent_remaining,service_level_objective)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "type": "query"
-      },
-      {
-        "allowCustomValue": false,
-        "current": {
-          "text": [],
-          "value": []
-        },
-        "definition": "label_values(optimization_request_objective_percent_remaining,objective_name)",
-        "hide": 2,
-        "includeAll": false,
-        "label": "objective_name",
-        "multi": true,
-        "name": "objective_name",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(optimization_request_objective_percent_remaining,objective_name)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 2,
-        "regex": "",
-        "type": "query"
-      },
-      {
-        "allValue": "All",
-        "allowCustomValue": false,
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "dfbml09r9gh6of"
-        },
-        "definition": "label_values(optimization_request_objective_percent_remaining{service_level_objective=\"$slo_name\"},objective_name)",
-        "hide": 2,
-        "includeAll": true,
-        "multi": true,
-        "name": "objective_repeate",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(optimization_request_objective_percent_remaining{service_level_objective=\"$slo_name\"},objective_name)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "type": "query"
-      },
-      {
-        "current": {
           "text": [
-            "example-app-slo/availability"
+            "example-app-slo/availability",
+            "k8s-apiserver-availability-slo/k8s-availability",
+            "example-app-slo-latency/availability"
           ],
           "value": [
-            "example-app-slo/availability"
+            "example-app-slo/availability",
+            "k8s-apiserver-availability-slo/k8s-availability",
+            "example-app-slo-latency/availability"
           ]
         },
-        "definition": "label_values(slok_slo_objective_actual,objective_id)",
+        "definition": "label_values(slok:sli_error_rate:5m,objective_id)",
+        "includeAll": false,
+        "label": "Objecive Id",
         "multi": true,
-        "name": "slo_id",
+        "name": "slo_objective_id",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(slok_slo_objective_actual,objective_id)",
+          "query": "label_values(slok:sli_error_rate:5m,objective_id)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -759,5 +963,5 @@
   "timezone": "browser/settings",
   "title": "SloK Dashboard",
   "uid": "ad6p4w9",
-  "version": 79
+  "version": 108
 }
