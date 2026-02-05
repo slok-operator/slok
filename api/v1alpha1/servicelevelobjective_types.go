@@ -102,22 +102,45 @@ type Alerting struct {
 	BurnRateAlerts BurnRates `json:"burnRateAlerts,omitempty"`
 }
 
-// Query holds the PromQL queries used to compute the SLI ratio (success / total).
+// Query holds the PromQL metric selectors used to compute the SLI error ratio.
+// Required when not using a template.
 type Query struct {
-	// success is the PromQL query that returns the count of successful events (numerator).
-	// +required
-	TotalQuery string `json:"totalQuery"`
+	// totalQuery is the Prometheus metric selector for total events.
+	// Example: http_requests_total{service="api"}
+	// +optional
+	TotalQuery string `json:"totalQuery,omitempty"`
 
-	// total is the PromQL query that returns the total count of events (denominator).
-	// +required
-	ErrorQuery string `json:"errorQuery"`
+	// errorQuery is the Prometheus metric selector for error events.
+	// Example: http_requests_total{service="api",status=~"5.."}
+	// +optional
+	ErrorQuery string `json:"errorQuery,omitempty"`
+}
+
+type TemplateStruct struct {
+	// name is the name of the template to use for this SLI.
+	// Available templates: http-availability
+	// +kubebuilder:validation:Enum=http-availability
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// labels are the Prometheus label selectors to filter metrics.
+	// Example: {"service": "payment-api", "namespace": "production"}
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // SLI (Service Level Indicator) defines how the objective is measured.
+// Use either a template (recommended) or manual queries.
 type SLI struct {
-	// query contains the PromQL queries used to compute the SLI value.
-	// +required
-	Query Query `json:"query"`
+	// query contains the manual Prometheus metric selectors.
+	// Required if template is not specified.
+	// +optional
+	Query Query `json:"query,omitempty"`
+
+	// template specifies a predefined SLI template.
+	// When set, query fields are ignored.
+	// +optional
+	Template TemplateStruct `json:"template,omitempty"`
 }
 
 // Possible values for ObjectiveStatus.Status.

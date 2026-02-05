@@ -186,23 +186,41 @@ spec:
                         measure this objective.
                       properties:
                         query:
-                          description: query contains the PromQL queries used to compute
-                            the SLI value.
+                          description: |-
+                            query contains the manual Prometheus metric selectors.
+                            Required if template is not specified.
                           properties:
                             errorQuery:
-                              description: total is the PromQL query that returns
-                                the total count of events (denominator).
+                              description: |-
+                                errorQuery is the Prometheus metric selector for error events.
+                                Example: http_requests_total{service="api",status=~"5.."}
                               type: string
                             totalQuery:
-                              description: success is the PromQL query that returns
-                                the count of successful events (numerator).
+                              description: |-
+                                totalQuery is the Prometheus metric selector for total events.
+                                Example: http_requests_total{service="api"}
                               type: string
-                          required:
-                          - errorQuery
-                          - totalQuery
                           type: object
-                      required:
-                      - query
+                        template:
+                          description: |-
+                            template specifies a predefined SLI template.
+                            When set, query fields are ignored.
+                          properties:
+                            labels:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                labels are the Prometheus label selectors to filter metrics.
+                                Example: {"service": "payment-api", "namespace": "production"}
+                              type: object
+                            name:
+                              description: |-
+                                name is the name of the template to use for this SLI.
+                                Available templates: http-availability
+                              enum:
+                              - http-availability
+                              type: string
+                          type: object
                       type: object
                     target:
                       description: target is the target percentage for the objective
