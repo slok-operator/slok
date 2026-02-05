@@ -367,6 +367,17 @@ The objective status is determined by burn rate thresholds (Google SRE Workbook)
 | `met` | All burn rates below thresholds |
 | `unknown` | Unable to query Prometheus |
 
+### Dashboard
+
+SLOK exports Prometheus metrics that can be visualized in Grafana:
+
+![SLOK Dashboard](docs/images/dashboard.png)
+
+The dashboard shows:
+- **Overview**: Total objectives count and status distribution (Warning, Degraded, Critical, Violated)
+- **Objective details**: Target, error budget remaining, burned budget, and burn rate
+- **Time series**: SLI availability over time and error budget consumption
+
 ## Alerting
 
 SLOK generates `PrometheusRule` resources in the same namespace as the SLO. Each
