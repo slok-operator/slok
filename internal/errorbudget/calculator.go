@@ -23,7 +23,7 @@ type Budget struct {
 	PercentRemaining float64
 }
 
-func calculatePercentage(target float64, sliBurnRateWindowed float64, sliErrorRate float64, window string) (*Budget, float64, error) {
+func calculatePercentage(sliBurnRateWindowed float64, sliErrorRate float64, window string) (*Budget, float64, error) {
 	duration, err := parseWindow(window)
 	if err != nil {
 		return &Budget{}, 0.0, err
@@ -53,7 +53,7 @@ func calculatePercentage(target float64, sliBurnRateWindowed float64, sliErrorRa
 }
 
 func Calculate(obj observabilityv1alpha1.Objective, sliBurnRateWindowed float64, sliErrorRate float64) (*Budget, float64, error) {
-	return calculatePercentage(obj.Target, sliBurnRateWindowed, sliErrorRate, obj.Window)
+	return calculatePercentage(sliBurnRateWindowed, sliErrorRate, obj.Window)
 }
 
 // parseWindow converts window string to duration

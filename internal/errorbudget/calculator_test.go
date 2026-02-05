@@ -9,13 +9,13 @@ import (
 
 func TestCalculate(t *testing.T) {
 	tests := []struct {
-		name                 string
-		objective            observabilityv1alpha1.Objective
-		sliBurnRateWindowed  float64
-		sliErrorRate         float64
-		expectedBudget       *Budget
-		expectedActual       float64
-		expectError          bool
+		name                string
+		objective           observabilityv1alpha1.Objective
+		sliBurnRateWindowed float64
+		sliErrorRate        float64
+		expectedBudget      *Budget
+		expectedActual      float64
+		expectError         bool
 	}{
 		{
 			name: "Budget exhausted with 30d window",
