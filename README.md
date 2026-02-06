@@ -95,8 +95,9 @@ helm install slok charts/slok \
 # Check operator is running
 kubectl get pods -n slok-system
 
-# Check CRD is installed
+# Check CRDs are installed
 kubectl get crd servicelevelobjectives.observability.slok.io
+kubectl get crd slocorrelations.observability.slok.io
 ```
 
 ## SLI Templates
@@ -506,6 +507,132 @@ alerting:
 Budget alerts tell you *how much* budget is left. Burn rate alerts tell you *how fast*
 it is being consumed. Using both gives you coverage for slow, sustained degradation
 (caught by budget alerts) and sudden spikes (caught by burn rate alerts).
+
+## Event Correlation
+
+SLOK automatically correlates SLO degradation with cluster changes to help identify root causes. When a burn rate spike is detected, SLOK creates an `SLOCorrelation` resource that lists recent changes that may have caused the problem.
+
+### How It Works
+
+1. **Change Collection**: SLOK watches Deployments, ConfigMaps, Secrets, and Events in the cluster
+2. **Spike Detection**: When the burn rate suddenly increases, SLOK triggers correlation analysis
+3. **Time Window Analysis**: SLOK looks at changes from 30 minutes before to 10 minutes after the spike
+4. **Confidence Scoring**: Each change is scored based on timing, namespace, resource type, and label matching
+
+### SLOCorrelation CRD
+
+When a burn rate spike is detected, SLOK creates an `SLOCorrelation` resource:
+
+```bash
+# List all correlations
+kubectl get slocorr
+
+# Output:
+NAME                              SLO                 SEVERITY   BURN RATE   EVENTS   DETECTED              AGE
+example-app-slo-2026-02-06-1520   example-app-slo     critical   100         2        2026-02-06T15:20:00Z  5m
+```
+
+```bash
+# View correlation details
+kubectl get slocorr example-app-slo-2026-02-06-1520 -o yaml
+```
+
+```yaml
+apiVersion: observability.slok.io/v1alpha1
+kind: SLOCorrelation
+metadata:
+  name: example-app-slo-2026-02-06-1520
+  namespace: default
+spec:
+  sloRef:
+    name: example-app-slo
+    namespace: default
+status:
+  detectedAt: "2026-02-06T15:20:00Z"
+  burnRateAtDetection: 100
+  previousBurnRate: 0.5
+  severity: critical
+  window:
+    start: "2026-02-06T14:50:00Z"
+    end: "2026-02-06T15:30:00Z"
+  correlatedEvents:
+    - kind: Deployment
+      name: example-app
+      namespace: default
+      timestamp: "2026-02-06T15:18:00Z"
+      changeType: update
+      change: "image: myapp:v1.4.2"
+      actor: kubectl
+      confidence: high
+  summary: "Burn rate spike (critical) likely caused by Deployment default/example-app: image: myapp:v1.4.2"
+  eventCount: 1
+```
+
+### Workload Selector
+
+Use `workloadSelector` to filter which cluster changes are considered during correlation. This reduces noise by only including changes to resources related to your SLO.
+
+```yaml
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: payment-api-availability
+spec:
+  displayName: "Payment API Availability"
+  workloadSelector:
+    labelSelector:
+      app: payment-api
+      team: platform
+    namespaces:            # Optional: defaults to SLO namespace
+      - production
+      - staging
+  objective:
+    name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      template:
+        name: http-availability
+        labels:
+          service: "payment-api"
+```
+
+| Field | Description |
+|-------|-------------|
+| `labelSelector` | Only include resources with ALL specified labels |
+| `namespaces` | Limit correlation to these namespaces (defaults to SLO namespace) |
+
+Without `workloadSelector`, SLOK considers all changes in the SLO's namespace.
+
+### Confidence Scoring
+
+Each correlated event receives a confidence level based on multiple factors:
+
+| Factor | Score | Description |
+|--------|-------|-------------|
+| **Time proximity** | +30 | Change within 15 minutes of spike |
+| | +15 | Change within 60 minutes of spike |
+| | +5 | Change outside 60 minutes |
+| **Same namespace** | +20 | Change in the same namespace as SLO |
+| **Resource type** | +25 | Deployment changes |
+| | +20 | ConfigMap changes |
+| | +15 | Secret changes |
+| | -5 | Event (usually a consequence, not cause) |
+| **Label match** | +30 | Resource labels match `workloadSelector.labelSelector` |
+
+Final confidence level:
+- **high**: Score >= 50
+- **medium**: Score >= 25
+- **low**: Score < 25
+
+### Watched Resources
+
+| Resource | What's Tracked | Example Diff |
+|----------|---------------|--------------|
+| Deployment | Container images, replicas | `image: myapp:v1.4.3` |
+| ConfigMap | Key count changes | `keys: 5` |
+| Secret | Type and key count (no values) | `type: Opaque, keys: 3` |
+| Event | CrashLoopBackOff, OOMKilled, FailedScheduling, etc. | `OOMKilled: Container exceeded memory limit` |
 
 ## Limitations
 
