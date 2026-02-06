@@ -5,9 +5,28 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - events
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - observability.slok.io
   resources:
   - servicelevelobjectives
+  - slocorrelations
   verbs:
   - create
   - delete
@@ -26,6 +45,7 @@ rules:
   - observability.slok.io
   resources:
   - servicelevelobjectives/status
+  - slocorrelations/status
   verbs:
   - get
   - patch

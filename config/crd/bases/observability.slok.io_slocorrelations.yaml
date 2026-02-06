@@ -1,0 +1,192 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: slocorrelations.observability.slok.io
+spec:
+  group: observability.slok.io
+  names:
+    kind: SLOCorrelation
+    listKind: SLOCorrelationList
+    plural: slocorrelations
+    shortNames:
+    - slocorr
+    singular: slocorrelation
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.sloRef.name
+      name: SLO
+      type: string
+    - jsonPath: .status.severity
+      name: Severity
+      type: string
+    - format: float
+      jsonPath: .status.burnRateAtDetection
+      name: Burn Rate
+      type: number
+    - jsonPath: .status.eventCount
+      name: Events
+      type: integer
+    - jsonPath: .status.detectedAt
+      name: Detected
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: SLOCorrelation records a burn rate spike and correlated cluster
+          changes
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the SLO reference
+            properties:
+              sloRef:
+                description: sloRef references the ServiceLevelObjective that triggered
+                  this correlation
+                properties:
+                  name:
+                    description: name is the name of the ServiceLevelObjective
+                    type: string
+                  namespace:
+                    description: namespace is the namespace of the ServiceLevelObjective
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+            required:
+            - sloRef
+            type: object
+          status:
+            description: status contains the correlation analysis results
+            properties:
+              burnRateAtDetection:
+                description: burnRateAtDetection is the burn rate value when the spike
+                  was detected
+                type: number
+              correlatedEvents:
+                description: correlatedEvents is the list of changes that may have
+                  caused the degradation
+                items:
+                  description: CorrelatedEvent represents a Kubernetes change that
+                    may have caused the SLO degradation
+                  properties:
+                    actor:
+                      description: actor is who or what triggered the change (e.g.,
+                        "user@example.com", "argocd")
+                      type: string
+                    change:
+                      description: 'change describes what changed (e.g., "image: v1.4.2
+                        → v1.4.3")'
+                      type: string
+                    changeType:
+                      description: changeType indicates what kind of change occurred
+                        (create, update, delete)
+                      enum:
+                      - create
+                      - update
+                      - delete
+                      type: string
+                    confidence:
+                      description: confidence indicates how likely this event caused
+                        the SLO degradation
+                      enum:
+                      - high
+                      - medium
+                      - low
+                      type: string
+                    kind:
+                      description: kind is the Kubernetes resource kind (e.g., "Deployment",
+                        "ConfigMap")
+                      type: string
+                    name:
+                      description: name is the name of the resource that changed
+                      type: string
+                    namespace:
+                      description: namespace is the namespace of the resource
+                      type: string
+                    timestamp:
+                      description: timestamp is when the change occurred
+                      format: date-time
+                      type: string
+                  required:
+                  - changeType
+                  - confidence
+                  - kind
+                  - name
+                  - namespace
+                  - timestamp
+                  type: object
+                type: array
+              detectedAt:
+                description: detectedAt is when the burn rate spike was detected
+                format: date-time
+                type: string
+              eventCount:
+                description: eventCount is the total number of events found in the
+                  window
+                type: integer
+              previousBurnRate:
+                description: previousBurnRate is the burn rate from the previous reconcile
+                type: number
+              severity:
+                description: severity indicates the severity level that was triggered
+                enum:
+                - critical
+                - degraded
+                - warning
+                type: string
+              summary:
+                description: summary is a human-readable description of the likely
+                  cause
+                type: string
+              window:
+                description: window is the time range that was analyzed for correlations
+                properties:
+                  end:
+                    description: end is the end of the analysis window
+                    format: date-time
+                    type: string
+                  start:
+                    description: start is the beginning of the analysis window
+                    format: date-time
+                    type: string
+                required:
+                - end
+                - start
+                type: object
+            required:
+            - burnRateAtDetection
+            - detectedAt
+            - severity
+            - window
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
