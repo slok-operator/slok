@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+#### Event Correlation
+- New `SLOCorrelation` CRD that records burn rate spikes and correlated cluster changes
+  - Short name: `slocorr` for `kubectl get slocorr`
+  - Printer columns: SLO, Severity, Burn Rate, Events, Detected, Age
+  - Status includes: correlated events, severity, time window, human-readable summary
+- Automatic correlation analysis triggered when burn rate spikes are detected
+- Change collector watches Deployments, ConfigMaps, Secrets, and Events in the cluster
+- Anomaly detector identifies burn rate spikes using rolling window comparison
+- Correlation engine scores changes based on:
+  - Time proximity to the spike (±30 minutes window)
+  - Namespace matching
+  - Resource type (Deployments scored higher than Events)
+  - Label selector matching
+- Confidence levels (high/medium/low) assigned to each correlated event
+- `workloadSelector` field added to `ServiceLevelObjective` spec for filtering correlation:
+  - `labelSelector`: only include resources with matching labels
+  - `namespaces`: limit correlation to specific namespaces (defaults to SLO namespace)
+- Watched resources track:
+  - Deployments: container images
+  - ConfigMaps: key count changes
+  - Secrets: type and key count (values never exposed)
+  - Events: CrashLoopBackOff, OOMKilled, FailedScheduling, ImagePullBackOff, etc.
+
 #### SLI Templates
 - Built-in templates for common SLI patterns that generate PromQL automatically:
   - `http-availability`: HTTP request success rate (non-5xx responses) using `http_requests_total`
@@ -23,7 +46,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Refactored `prometheus_rule_generator.go` to use helper functions and loops, reducing code duplication
 - Updated README with SLI Templates documentation and examples
+- Updated README with Event Correlation documentation including SLOCorrelation CRD, workloadSelector, and confidence scoring
 - Removed "Manual PromQL required" from limitations (templates are now available)
+- Controller now integrates with correlation engine to create SLOCorrelation resources on burn rate spikes
+- Added RBAC permissions for watching Deployments, ConfigMaps, Secrets, and Events
 
 ### Fixed
 
