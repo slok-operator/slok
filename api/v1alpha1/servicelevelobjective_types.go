@@ -148,6 +148,21 @@ type SLI struct {
 	Template TemplateStruct `json:"template,omitempty"`
 }
 
+// WorkloadSelector defines which cluster workloads are related to this SLO.
+// Used by the correlation engine to filter relevant events during root cause analysis.
+type WorkloadSelector struct {
+	// labelSelector matches workloads by their labels.
+	// Only resources with ALL specified labels will be included in correlation.
+	// Example: {"app": "example-app", "team": "platform"}
+	// +optional
+	LabelSelector map[string]string `json:"labelSelector,omitempty"`
+
+	// namespaces limits correlation to these namespaces.
+	// If empty, only the SLO's namespace is used.
+	// +optional
+	Namespaces []string `json:"namespaces,omitempty"`
+}
+
 // Possible values for ObjectiveStatus.Status.
 const (
 	ObjectiveConditionMet      = "met"
@@ -196,6 +211,12 @@ type ServiceLevelObjectiveSpec struct {
 	// objectives defines the objective for this Service Level Objective.
 	// +required
 	Objective Objective `json:"objective"`
+
+	// workloadSelector defines which cluster workloads are related to this SLO.
+	// Used by the correlation engine to filter relevant events during root cause analysis.
+	// If not specified, all events in the SLO namespace are considered.
+	// +optional
+	WorkloadSelector *WorkloadSelector `json:"workloadSelector,omitempty"`
 }
 
 // ErrorBudgetStatus represents error budget consumption
