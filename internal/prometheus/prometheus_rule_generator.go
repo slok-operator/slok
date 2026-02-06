@@ -49,11 +49,13 @@ func baseLabels(sloName, sloNamespace, objectiveName, window string) map[string]
 	}
 }
 
-// sliErrorRateExpr builds the zero-traffic safe SLI error rate expression
+// sliErrorRateExpr builds the zero-traffic safe SLI error rate expression.
+// When the service is completely down (no metrics), returns 1 (100% error rate)
+// via the OR absent(...) fallback.
 func sliErrorRateExpr(errorQuery, totalQuery, window string) string {
 	return fmt.Sprintf(
-		"(sum(rate(%s[%s])) OR (sum(rate(%s[%s])) * 0)) / clamp_min(sum(rate(%s[%s])), 1e-12)",
-		errorQuery, window, totalQuery, window, totalQuery, window,
+		"((sum(rate(%s[%s])) OR (sum(rate(%s[%s])) * 0)) / clamp_min(sum(rate(%s[%s])), 1e-12)) OR absent(sum(rate(%s[%s])))",
+		errorQuery, window, totalQuery, window, totalQuery, window, totalQuery, window,
 	)
 }
 
