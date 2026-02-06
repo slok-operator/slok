@@ -23,9 +23,11 @@ import (
 	"time"
 
 	"github.com/federicolepera/slok/internal/burnrate"
+	"github.com/federicolepera/slok/internal/correlation"
 	"github.com/federicolepera/slok/internal/errorbudget"
 	sloklog "github.com/federicolepera/slok/internal/log"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,6 +46,10 @@ type ServiceLevelObjectiveReconciler struct {
 	Scheme           *runtime.Scheme
 	PrometheusClient prometheus.PrometheusClient
 	PrometheusURL    string
+	// Correlation support
+	ChangeCollector   *correlation.ChangeCollector
+	CorrelationEngine *correlation.CorrelationEngine
+	AnomalyDetector   *correlation.AnomalyDetector
 }
 type burnRatePreset struct {
 	ShortWindow string
@@ -61,6 +67,10 @@ var defaultBurnRatePresets = []burnRatePreset{
 // +kubebuilder:rbac:groups=observability.slok.io,resources=servicelevelobjectives,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=observability.slok.io,resources=servicelevelobjectives/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=observability.slok.io,resources=servicelevelobjectives/finalizers,verbs=update
+// +kubebuilder:rbac:groups=observability.slok.io,resources=slocorrelations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=observability.slok.io,resources=slocorrelations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=configmaps;secrets;events,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -250,6 +260,55 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			LongWindow:    br.LongWindow,
 			ShortWindow:   br.ShortWindow,
 		})
+	}
+
+	// Check for burn rate spike and create correlation if needed
+	if r.AnomalyDetector != nil && r.CorrelationEngine != nil && len(burnRates) > 0 {
+		// Use 5m burn rate for spike detection (most responsive)
+		currentBurnRate := burnRates[0].ShortBurnRate
+		spikeResult := r.AnomalyDetector.DetectSpike(slo.Namespace, slo.Name, currentBurnRate)
+
+		if spikeResult.Detected {
+			logger.Info("Burn rate spike detected, creating correlation",
+				"severity", spikeResult.Severity,
+				"current_burn_rate", spikeResult.CurrentBurnRate,
+				"previous_burn_rate", spikeResult.PreviousBurnRate,
+			)
+
+			// Create correlation analysis
+			corr := r.CorrelationEngine.Analyze(
+				slo.Name,
+				slo.Namespace,
+				time.Now(),
+				spikeResult.CurrentBurnRate,
+				spikeResult.PreviousBurnRate,
+				spikeResult.Severity,
+				slo.Spec.WorkloadSelector,
+			)
+
+			// Set owner reference
+			if err := controllerutil.SetControllerReference(&slo, corr, r.Scheme); err != nil {
+				logger.Error(err, "Failed to set owner reference on SLOCorrelation")
+			} else {
+				// Save status before Create (Create overwrites corr with API response which has empty status)
+				savedStatus := corr.Status
+
+				// Create the correlation resource (spec only)
+				if err := r.Create(ctx, corr); err != nil {
+					if !errors.IsAlreadyExists(err) {
+						logger.Error(err, "Failed to create SLOCorrelation", "name", corr.Name)
+					}
+				} else {
+					// Restore status and update the status subresource
+					corr.Status = savedStatus
+					if err := r.Status().Update(ctx, corr); err != nil {
+						logger.Error(err, "Failed to update SLOCorrelation status", "name", corr.Name)
+					} else {
+						logger.Info("Created SLOCorrelation", "name", corr.Name, "events", corr.Status.EventCount)
+					}
+				}
+			}
+		}
 	}
 
 	objectiveStatus = observabilityv1alpha1.ObjectiveStatus{

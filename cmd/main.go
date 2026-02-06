@@ -37,6 +37,7 @@ import (
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
 	"github.com/federicolepera/slok/internal/controller"
+	"github.com/federicolepera/slok/internal/correlation"
 	webhookv1alpha1 "github.com/federicolepera/slok/internal/webhook/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	// +kubebuilder:scaffold:imports
@@ -187,10 +188,25 @@ func main() {
 	}
 	setupLog.Info("Using Prometheus URL", "url", prometheusURL)
 
+	// Initialize correlation components for SLO event correlation
+	changeCollector := correlation.NewChangeCollector()
+	if err := changeCollector.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to setup change collector")
+		os.Exit(1)
+	}
+	setupLog.Info("Change collector initialized")
+
+	correlationEngine := correlation.NewCorrelationEngine(changeCollector)
+	anomalyDetector := correlation.NewAnomalyDetector()
+	setupLog.Info("Correlation engine and anomaly detector initialized")
+
 	if err := (&controller.ServiceLevelObjectiveReconciler{
-		Client:        mgr.GetClient(),
-		Scheme:        mgr.GetScheme(),
-		PrometheusURL: prometheusURL,
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		PrometheusURL:     prometheusURL,
+		ChangeCollector:   changeCollector,
+		CorrelationEngine: correlationEngine,
+		AnomalyDetector:   anomalyDetector,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ServiceLevelObjective")
 		os.Exit(1)
