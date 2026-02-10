@@ -17,7 +17,12 @@ limitations under the License.
 package correlation
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -107,6 +112,18 @@ func (e *CorrelationEngine) Analyze(
 
 	// Create correlation name
 	correlationName := fmt.Sprintf("%s-%s", sloName, triggerTime.Format("2006-01-02-1504"))
+
+	// If GROQ_API_KEY is set, use LLM to refine the summary
+	if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" && len(filteredChanges) > 0 {
+		llmSummary := e.queryLLM(
+			apiKey, sloName, sloNamespace,
+			triggerTime, burnRate, previousBurnRate, severity,
+			windowStart, windowEnd, filteredChanges,
+		)
+		if llmSummary != "" {
+			summary = llmSummary
+		}
+	}
 
 	return &observabilityv1alpha1.SLOCorrelation{
 		ObjectMeta: metav1.ObjectMeta{
@@ -301,4 +318,95 @@ func (e *CorrelationEngine) filterBySelector(
 	}
 
 	return filtered
+}
+
+// queryLLM calls Groq API to get an LLM-refined summary of the correlation
+func (e *CorrelationEngine) queryLLM(
+	apiKey string,
+	sloName, sloNamespace string,
+	triggerTime time.Time,
+	burnRate, previousBurnRate float64,
+	severity string,
+	windowStart, windowEnd time.Time,
+	changes []ChangeRecord,
+) string {
+	systemPrompt := `You are a helpful assistant for correlating SLO burn rate spikes with Kubernetes cluster changes. ` +
+		`Analyze the provided changes and determine which ones are most likely the root cause of the burn rate spike ` +
+		`based on timing, resource type, and relevance. ` +
+		`If there exists an event that intentionally brings capacity to zero, that one always wins over probe failures, pod churn, and secondary errors. ` +
+		`Do NOT trust the confidence levels - they may not be accurate. ` +
+		`Respond with ONLY a single summary sentence identifying the most likely root cause.`
+
+	userPrompt := fmt.Sprintf(
+		"An SLO burn rate spike was detected for SLO '%s' in namespace '%s' at %s with burn rate %.2f (previous: %.2f). "+
+			"Severity: %s. Analysis window: %s to %s.\n\nCluster changes:\n%s",
+		sloName, sloNamespace,
+		triggerTime.Format(time.RFC3339), burnRate, previousBurnRate, severity,
+		windowStart.Format(time.RFC3339), windowEnd.Format(time.RFC3339),
+		formatChanges(changes),
+	)
+
+	body, err := json.Marshal(map[string]interface{}{
+		"model": "llama-3.3-70b-versatile",
+		"messages": []map[string]string{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": userPrompt},
+		},
+		"temperature": 0.1,
+	})
+	if err != nil {
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST",
+		"https://api.groq.com/openai/v1/chat/completions",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return ""
+	}
+
+	if len(result.Choices) > 0 {
+		return strings.TrimSpace(result.Choices[0].Message.Content)
+	}
+	return ""
+}
+
+// formatChanges formats a list of changes for the LLM prompt
+func formatChanges(changes []ChangeRecord) string {
+	var sb strings.Builder
+	for _, c := range changes {
+		sb.WriteString(fmt.Sprintf("- [%s] %s %s/%s (%s) by %s: %s\n",
+			c.Timestamp.Format(time.RFC3339),
+			c.ChangeType, c.Namespace, c.Name,
+			c.Kind, c.Actor, c.Diff,
+		))
+	}
+	return sb.String()
 }
