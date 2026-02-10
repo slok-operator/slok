@@ -93,7 +93,7 @@ func (e *CorrelationEngine) Analyze(
 	})
 
 	// Convert to CorrelatedEvents
-	var correlatedEvents []observabilityv1alpha1.CorrelatedEvent
+	correlatedEvents := make([]observabilityv1alpha1.CorrelatedEvent, 0, len(scored))
 	for _, sc := range scored {
 		correlatedEvents = append(correlatedEvents, observabilityv1alpha1.CorrelatedEvent{
 			Kind:       sc.Record.Kind,
@@ -159,11 +159,11 @@ func (e *CorrelationEngine) scoreChanges(
 	sloNamespace string,
 	workloadLabels map[string]string,
 ) []ScoredChange {
-	var scored []ScoredChange
+	scored := make([]ScoredChange, 0, len(changes))
 
 	for _, change := range changes {
 		score := 0
-		confidence := observabilityv1alpha1.ConfidenceLow
+		var confidence string
 
 		// Time-based scoring
 		timeDiff := triggerTime.Sub(change.Timestamp)
@@ -375,7 +375,7 @@ func (e *CorrelationEngine) queryLLM(
 	if err != nil {
 		return ""
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return ""
