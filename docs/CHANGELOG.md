@@ -30,6 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - ConfigMaps: key count changes
   - Secrets: type and key count (values never exposed)
   - Events: CrashLoopBackOff, OOMKilled, FailedScheduling, ImagePullBackOff, etc.
+- Optional LLM-enhanced summary via Groq API (`GROQ_API_KEY` environment variable):
+  - Uses Llama 3.3 70B to refine the correlation summary with smarter root cause analysis
+  - 30-second timeout with automatic fallback to rule-based summary on failure
+  - Prioritizes capacity-reducing events over secondary symptoms (probe failures, pod churn)
 
 #### SLI Templates
 - Built-in templates for common SLI patterns that generate PromQL automatically:
