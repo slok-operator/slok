@@ -625,6 +625,28 @@ Final confidence level:
 - **medium**: Score >= 25
 - **low**: Score < 25
 
+### LLM-Enhanced Summary (Optional)
+
+When the `GROQ_API_KEY` environment variable is set, SLOK sends the correlated events to a large language model (Llama 3.3 70B on Groq) for smarter root cause analysis. The LLM overrides the default summary with a more accurate assessment that:
+
+- Prioritizes events that intentionally bring capacity to zero over secondary symptoms
+- Ignores probe failures and pod churn when a clear root cause exists
+- Re-evaluates confidence levels independently from the scoring engine
+
+This feature is **optional** -- without the environment variable, SLOK uses the built-in rule-based summary.
+
+```bash
+# Enable LLM-enhanced correlation
+export GROQ_API_KEY="gsk_..."
+```
+
+| Setting | Value |
+|---------|-------|
+| Provider | [Groq](https://console.groq.com) |
+| Model | `llama-3.3-70b-versatile` |
+| Timeout | 30 seconds |
+| Fallback | Rule-based summary if API call fails |
+
 ### Watched Resources
 
 | Resource | What's Tracked | Example Diff |
