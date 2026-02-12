@@ -23,7 +23,7 @@ func TestCalculate(t *testing.T) {
 				Name:   "availability",
 				Target: 99.9,
 				Window: "30d",
-				Sli:    observabilityv1alpha1.SLI{Query: observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
+				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
 			},
 			// sliBurnRateWindowed=1.0 → 100% consumed, 0% remaining
 			sliBurnRateWindowed: 1.0,
@@ -43,7 +43,7 @@ func TestCalculate(t *testing.T) {
 				Name:   "availability",
 				Target: 99.0,
 				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Query: observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
+				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
 			},
 			// sliBurnRateWindowed=0.5 → 50% consumed, 50% remaining
 			sliBurnRateWindowed: 0.5,
@@ -63,7 +63,7 @@ func TestCalculate(t *testing.T) {
 				Name:   "availability",
 				Target: 99.5,
 				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Query: observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
+				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
 			},
 			// sliBurnRateWindowed=0.91 → 91% consumed, 9% remaining
 			sliBurnRateWindowed: 0.91,
@@ -83,7 +83,7 @@ func TestCalculate(t *testing.T) {
 				Name:   "availability",
 				Target: 99.9,
 				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Query: observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
+				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
 			},
 			// sliBurnRateWindowed=0 → 0% consumed, 100% remaining
 			sliBurnRateWindowed: 0,
@@ -103,7 +103,7 @@ func TestCalculate(t *testing.T) {
 				Name:   "availability",
 				Target: 99.9,
 				Window: "1d",
-				Sli:    observabilityv1alpha1.SLI{Query: observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
+				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
 			},
 			// sliBurnRateWindowed=1.5 → over 100% consumed, remaining clamped to 0
 			sliBurnRateWindowed: 1.5,

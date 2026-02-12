@@ -129,7 +129,7 @@ var _ = Describe("ServiceLevelObjective Controller", func() {
 							Target: 99.9,
 							Window: "30d",
 							Sli: observabilityv1alpha1.SLI{
-								Query: observabilityv1alpha1.Query{
+								Query: &observabilityv1alpha1.Query{
 									TotalQuery: `sum(rate(http_requests_total[5m]))`,
 									ErrorQuery: `sum(rate(http_requests_total{code=~"5.."}[5m]))`,
 								},

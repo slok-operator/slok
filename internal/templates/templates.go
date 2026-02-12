@@ -44,16 +44,15 @@ func (r ResolvedQuery) IsRawExpression() bool {
 // Otherwise, it returns the manually specified queries.
 func Resolve(sli observabilityv1alpha1.SLI) (ResolvedQuery, error) {
 	// If template is specified, use it
-	if sli.Template.Name != "" {
-		return resolveTemplate(sli.Template)
+	if sli.Template != nil {
+		return resolveTemplate(*sli.Template)
 	}
 
-	// Validate manual queries are provided
-	if sli.Query.TotalQuery == "" || sli.Query.ErrorQuery == "" {
-		return ResolvedQuery{}, fmt.Errorf("either template or both totalQuery and errorQuery must be specified")
+	// Use manual queries (CRD validation ensures query is present if template is nil)
+	if sli.Query == nil {
+		return ResolvedQuery{}, fmt.Errorf("either template or query must be specified")
 	}
 
-	// Use manual queries
 	return ResolvedQuery{
 		TotalQuery: sli.Query.TotalQuery,
 		ErrorQuery: sli.Query.ErrorQuery,

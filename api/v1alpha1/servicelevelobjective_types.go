@@ -107,21 +107,23 @@ type Alerting struct {
 type Query struct {
 	// totalQuery is the Prometheus metric selector for total events.
 	// Example: http_requests_total{service="api"}
-	// +optional
-	TotalQuery string `json:"totalQuery,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	TotalQuery string `json:"totalQuery"`
 
 	// errorQuery is the Prometheus metric selector for error events.
 	// Example: http_requests_total{service="api",status=~"5.."}
-	// +optional
-	ErrorQuery string `json:"errorQuery,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	ErrorQuery string `json:"errorQuery"`
 }
 
 type TemplateStruct struct {
 	// name is the name of the template to use for this SLI.
 	// Available templates: http-availability, http-latency, kubernetes-apiserver
 	// +kubebuilder:validation:Enum=http-availability;http-latency;kubernetes-apiserver
-	// +optional
-	Name string `json:"name,omitempty"`
+	// +required
+	Name string `json:"name"`
 
 	// labels are the Prometheus label selectors to filter metrics.
 	// Example: {"service": "payment-api", "namespace": "production"}
@@ -135,17 +137,18 @@ type TemplateStruct struct {
 }
 
 // SLI (Service Level Indicator) defines how the objective is measured.
-// Use either a template (recommended) or manual queries.
+// Use either a template (recommended) or manual queries, but not both.
+// +kubebuilder:validation:XValidation:rule="has(self.query) != has(self.template)",message="exactly one of query or template must be specified"
 type SLI struct {
 	// query contains the manual Prometheus metric selectors.
 	// Required if template is not specified.
 	// +optional
-	Query Query `json:"query,omitempty"`
+	Query *Query `json:"query,omitempty"`
 
 	// template specifies a predefined SLI template.
-	// When set, query fields are ignored.
+	// When set, query must not be specified.
 	// +optional
-	Template TemplateStruct `json:"template,omitempty"`
+	Template *TemplateStruct `json:"template,omitempty"`
 }
 
 // WorkloadSelector defines which cluster workloads are related to this SLO.
@@ -188,7 +191,9 @@ type Objective struct {
 	Target float64 `json:"target"`
 
 	// window is the time window over which the objective is measured (e.g., "30d" for 30 days).
-	// +optional
+	// Only days are supported (e.g., "7d", "30d").
+	// +kubebuilder:validation:Pattern=`^\d+d$`
+	// +required
 	Window string `json:"window"`
 
 	// sli defines the Service Level Indicator used to measure this objective.

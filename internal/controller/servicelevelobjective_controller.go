@@ -133,7 +133,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 			logger.Error(err, "unable to create or update Prometheus rule", "prometheus_rule", desiredRule.Name)
 		}
 	}
-	logger.Info("Objective", "name", obj.Name, "target", obj.Target, "window", obj.Window, "sli_query", obj.Sli.Query)
+	logger.Info("Objective", "name", obj.Name, "target", obj.Target, "window", obj.Window, "sli", obj.Sli)
 
 	sliErrorRate5mQuery := fmt.Sprintf("slok:sli_error_rate:5m{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", obj.Name, slo.Name, slo.Namespace)
 	sliErrorRate5m, err := r.PrometheusClient.QuerySLI(ctx, sliErrorRate5mQuery)

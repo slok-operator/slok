@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: servicelevelobjectives.observability.slok.io
 spec:
   group: observability.slok.io
@@ -191,17 +191,22 @@ spec:
                             description: |-
                               errorQuery is the Prometheus metric selector for error events.
                               Example: http_requests_total{service="api",status=~"5.."}
+                            minLength: 1
                             type: string
                           totalQuery:
                             description: |-
                               totalQuery is the Prometheus metric selector for total events.
                               Example: http_requests_total{service="api"}
+                            minLength: 1
                             type: string
+                        required:
+                        - errorQuery
+                        - totalQuery
                         type: object
                       template:
                         description: |-
                           template specifies a predefined SLI template.
-                          When set, query fields are ignored.
+                          When set, query must not be specified.
                         properties:
                           labels:
                             additionalProperties:
@@ -226,8 +231,13 @@ spec:
                               params are template-specific parameters.
                               For http-latency: threshold (e.g., "0.5" for 500ms)
                             type: object
+                        required:
+                        - name
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: exactly one of query or template must be specified
+                      rule: has(self.query) != has(self.template)
                   target:
                     description: target is the target percentage for the objective
                       (e.g., 99.9).
@@ -235,13 +245,16 @@ spec:
                     minimum: 0
                     type: number
                   window:
-                    description: window is the time window over which the objective
-                      is measured (e.g., "30d" for 30 days).
+                    description: |-
+                      window is the time window over which the objective is measured (e.g., "30d" for 30 days).
+                      Only days are supported (e.g., "7d", "30d").
+                    pattern: ^\d+d$
                     type: string
                 required:
                 - name
                 - sli
                 - target
+                - window
                 type: object
               workloadSelector:
                 description: |-

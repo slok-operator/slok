@@ -17,7 +17,7 @@ func TestResolve_WithHTTPAvailabilityTemplate(t *testing.T) {
 		{
 			name: "http-availability with labels",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: HTTPAvailability,
 					Labels: map[string]string{
 						"service": "payment-api",
@@ -31,7 +31,7 @@ func TestResolve_WithHTTPAvailabilityTemplate(t *testing.T) {
 		{
 			name: "http-availability with multiple labels",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: HTTPAvailability,
 					Labels: map[string]string{
 						"service":   "payment-api",
@@ -46,7 +46,7 @@ func TestResolve_WithHTTPAvailabilityTemplate(t *testing.T) {
 		{
 			name: "http-availability without labels",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: HTTPAvailability,
 				},
 			},
@@ -87,7 +87,7 @@ func TestResolve_WithHTTPAvailabilityTemplate(t *testing.T) {
 
 func TestResolve_WithManualQueries(t *testing.T) {
 	sli := observabilityv1alpha1.SLI{
-		Query: observabilityv1alpha1.Query{
+		Query: &observabilityv1alpha1.Query{
 			TotalQuery: "my_custom_total",
 			ErrorQuery: "my_custom_errors",
 		},
@@ -116,42 +116,12 @@ func TestResolve_MissingQueriesAndTemplate(t *testing.T) {
 	}
 }
 
-func TestResolve_PartialQueries(t *testing.T) {
-	tests := []struct {
-		name string
-		sli  observabilityv1alpha1.SLI
-	}{
-		{
-			name: "only totalQuery",
-			sli: observabilityv1alpha1.SLI{
-				Query: observabilityv1alpha1.Query{
-					TotalQuery: "some_total",
-				},
-			},
-		},
-		{
-			name: "only errorQuery",
-			sli: observabilityv1alpha1.SLI{
-				Query: observabilityv1alpha1.Query{
-					ErrorQuery: "some_errors",
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := Resolve(tt.sli)
-			if err == nil {
-				t.Error("Resolve() expected error when only partial queries provided")
-			}
-		})
-	}
-}
+// Note: partial queries validation (only totalQuery or only errorQuery)
+// is now handled by CRD validation (+required, MinLength=1) at admission time.
 
 func TestResolve_UnknownTemplate(t *testing.T) {
 	sli := observabilityv1alpha1.SLI{
-		Template: observabilityv1alpha1.TemplateStruct{
+		Template: &observabilityv1alpha1.TemplateStruct{
 			Name: "unknown-template",
 		},
 	}
@@ -244,7 +214,7 @@ func TestResolve_WithHTTPLatencyTemplate(t *testing.T) {
 		{
 			name: "http-latency with labels and threshold",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: HTTPLatency,
 					Labels: map[string]string{
 						"service": "payment-api",
@@ -260,7 +230,7 @@ func TestResolve_WithHTTPLatencyTemplate(t *testing.T) {
 		{
 			name: "http-latency without labels",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: HTTPLatency,
 					Params: map[string]string{
 						"threshold": "0.5",
@@ -273,7 +243,7 @@ func TestResolve_WithHTTPLatencyTemplate(t *testing.T) {
 		{
 			name: "http-latency missing threshold",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: HTTPLatency,
 					Labels: map[string]string{
 						"service": "payment-api",
@@ -285,7 +255,7 @@ func TestResolve_WithHTTPLatencyTemplate(t *testing.T) {
 		{
 			name: "http-latency empty threshold",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: HTTPLatency,
 					Params: map[string]string{
 						"threshold": "",
@@ -367,7 +337,7 @@ func TestResolve_WithKubernetesAPIServerTemplate(t *testing.T) {
 		{
 			name: "kubernetes-apiserver with labels",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: KubernetesAPIServer,
 					Labels: map[string]string{
 						"verb":     "GET",
@@ -382,7 +352,7 @@ func TestResolve_WithKubernetesAPIServerTemplate(t *testing.T) {
 		{
 			name: "kubernetes-apiserver without labels",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: KubernetesAPIServer,
 				},
 			},
@@ -393,7 +363,7 @@ func TestResolve_WithKubernetesAPIServerTemplate(t *testing.T) {
 		{
 			name: "kubernetes-apiserver with custom error codes",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: KubernetesAPIServer,
 					Params: map[string]string{
 						"errorCodes": "4..|5..",
@@ -407,7 +377,7 @@ func TestResolve_WithKubernetesAPIServerTemplate(t *testing.T) {
 		{
 			name: "kubernetes-apiserver with single label",
 			sli: observabilityv1alpha1.SLI{
-				Template: observabilityv1alpha1.TemplateStruct{
+				Template: &observabilityv1alpha1.TemplateStruct{
 					Name: KubernetesAPIServer,
 					Labels: map[string]string{
 						"verb": "LIST",
