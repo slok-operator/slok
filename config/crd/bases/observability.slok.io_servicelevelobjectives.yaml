@@ -79,7 +79,7 @@ spec:
                       rate) for this objective.
                     properties:
                       budgetErrorAlerts:
-                        description: budgetAlerts is a list of error budget threshold
+                        description: budgetErrorAlerts configures error budget threshold
                           alerts.
                         properties:
                           alerts:
@@ -115,15 +115,19 @@ spec:
                               type: object
                             type: array
                           enabled:
+                            description: enabled controls whether budget error alerts
+                              are generated.
                             type: boolean
+                        required:
+                        - enabled
                         type: object
                       burnRateAlerts:
-                        description: burnRateAlerts is a list of burn rate alerting
+                        description: burnRateAlerts configures burn rate alerting
                           rules.
                         properties:
                           alerts:
-                            description: name is the unique identifier for this burn
-                              rate alert.
+                            description: alerts is a list of custom burn rate alerting
+                              rules.
                             items:
                               properties:
                                 consumePercent:
@@ -169,9 +173,17 @@ spec:
                               type: object
                             type: array
                           enabled:
+                            description: enabled controls whether burn rate alerts
+                              are generated.
                             type: boolean
+                        required:
+                        - enabled
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: at least one of budgetErrorAlerts or burnRateAlerts
+                        must be specified
+                      rule: has(self.budgetErrorAlerts) || has(self.burnRateAlerts)
                   name:
                     description: name is the unique name of the objective within the
                       Service Level Objective.

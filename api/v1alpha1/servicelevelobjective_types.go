@@ -69,20 +69,22 @@ type BurnRateAlert struct {
 	Severity string `json:"severity"`
 }
 
-// BurnRateAlert defines a burn rate alerting rule.
-// It determines how fast the error budget is being consumed
-// and triggers alerts when the burn rate exceeds the threshold.
+// BurnRates configures burn rate alerting for an objective.
 type BurnRates struct {
-	Enabled bool `json:"enabled,omitempty"`
-	// name is the unique identifier for this burn rate alert.
+	// enabled controls whether burn rate alerts are generated.
+	// +required
+	Enabled bool `json:"enabled"`
+
+	// alerts is a list of custom burn rate alerting rules.
 	// +optional
 	Alerts []BurnRateAlert `json:"alerts,omitempty"`
 }
 
-// BudgetAlert defines an error budget threshold alerting rule.
-// It triggers an alert when the remaining error budget drops below the specified percentage.
+// BudgetErrors configures error budget threshold alerting for an objective.
 type BudgetErrors struct {
-	Enabled bool `json:"enabled,omitempty"`
+	// enabled controls whether budget error alerts are generated.
+	// +required
+	Enabled bool `json:"enabled"`
 
 	// alerts is a list of budget alerting rules.
 	// Each alert specifies a threshold percentage and severity level.
@@ -92,14 +94,16 @@ type BudgetErrors struct {
 
 // Alerting configures the alerting behaviour for an objective.
 // When enabled, PrometheusRule resources are created for budget and/or burn rate alerts.
+// At least one of budgetErrorAlerts or burnRateAlerts must be specified.
+// +kubebuilder:validation:XValidation:rule="has(self.budgetErrorAlerts) || has(self.burnRateAlerts)",message="at least one of budgetErrorAlerts or burnRateAlerts must be specified"
 type Alerting struct {
-	// budgetAlerts is a list of error budget threshold alerts.
+	// budgetErrorAlerts configures error budget threshold alerts.
 	// +optional
-	BudgetErrorAlerts BudgetErrors `json:"budgetErrorAlerts,omitempty"`
+	BudgetErrorAlerts *BudgetErrors `json:"budgetErrorAlerts,omitempty"`
 
-	// burnRateAlerts is a list of burn rate alerting rules.
+	// burnRateAlerts configures burn rate alerting rules.
 	// +optional
-	BurnRateAlerts BurnRates `json:"burnRateAlerts,omitempty"`
+	BurnRateAlerts *BurnRates `json:"burnRateAlerts,omitempty"`
 }
 
 // Query holds the PromQL metric selectors used to compute the SLI error ratio.
@@ -202,7 +206,7 @@ type Objective struct {
 
 	// alerting configures alerting rules (budget and burn rate) for this objective.
 	// +optional
-	Alerting Alerting `json:"alerting,omitempty"`
+	Alerting *Alerting `json:"alerting,omitempty"`
 }
 
 // ServiceLevelObjectiveSpec defines the desired state of a ServiceLevelObjective.

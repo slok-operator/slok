@@ -147,7 +147,7 @@ func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv
 	}
 
 	// Budget error alerts
-	if objective.Alerting.BudgetErrorAlerts.Enabled {
+	if objective.Alerting != nil && objective.Alerting.BudgetErrorAlerts != nil && objective.Alerting.BudgetErrorAlerts.Enabled {
 		budgetSelector := fmt.Sprintf(
 			`namespace="%s", service_level_objective="%s", objective_name="%s"`,
 			sloNamespace, sloName, objectiveName,
@@ -189,7 +189,7 @@ func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv
 	}
 
 	// Burn rate alerts using presets
-	if objective.Alerting.BurnRateAlerts.Enabled {
+	if objective.Alerting != nil && objective.Alerting.BurnRateAlerts != nil && objective.Alerting.BurnRateAlerts.Enabled {
 		alertGroup := monitoringv1.RuleGroup{
 			Name: fmt.Sprintf("slok.%s.%s-burnRateAlerts", sloName, objectiveName),
 		}
