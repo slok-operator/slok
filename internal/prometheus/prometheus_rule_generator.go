@@ -49,6 +49,17 @@ func baseLabels(sloName, sloNamespace, objectiveName, window string) map[string]
 	}
 }
 
+// baseLabelsComposition returns the common labels for aggregated composition rules.
+// Follows the same pattern as baseLabels but uses composition-scoped label keys.
+func baseLabelsComposition(compositionName, compositionNamespace, window string) map[string]string {
+	return map[string]string{
+		"slo_composition_name":      compositionName,
+		"slo_composition_namespace": compositionNamespace,
+		"composition_id":            fmt.Sprintf("%s/%s", compositionName, compositionNamespace),
+		"slok_window":               window,
+	}
+}
+
 // sliErrorRateExpr builds the zero-traffic safe SLI error rate expression.
 // When the service is completely down (no metrics), returns 1 (100% error rate)
 // via the OR absent(...) fallback.
@@ -78,6 +89,55 @@ func burnRateAlertExpr(sloName, sloNamespace, objectiveName string, preset burnR
 	)
 }
 
+func CreateAggregatedPrometheusRule(sloCompositionName, sloCompositionNamespace, compositionType string, slos []observabilityv1alpha1.ServiceLevelObjective) (monitoringv1.PrometheusRule, error){
+	switch compositionType {
+	case "AND_MIN":
+		// For AND_MIN, we create a PrometheusRule that calculates the minimum SLI error rate across all objectives.
+		prometheusRule := monitoringv1.PrometheusRule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("slok-%s-%s-aggregated", sloCompositionName, sloCompositionNamespace),
+				Namespace: sloCompositionNamespace,
+				Labels: map[string]string{
+					"release": "prometheus",
+					"slok.io/slo_composition": sloCompositionName,
+				},
+			},
+			Spec: monitoringv1.PrometheusRuleSpec{
+				Groups: []monitoringv1.RuleGroup{
+					{
+						Name: fmt.Sprintf("slok-%s-aggregated", sloCompositionName),
+					},
+				},
+			},
+		}
+		
+		rules := &prometheusRule.Spec.Groups[0].Rules
+
+		// Build regex selector: "slo1/ns1|slo2/ns2"
+		ids := make([]string, 0, len(slos))
+		for _, slo := range slos {
+			ids = append(ids, fmt.Sprintf("%s/%s", slo.Name, slo.Spec.Objective.Name))
+		}
+		objectiveIDSelector := strings.Join(ids, "|")
+
+		for _, window := range recordingWindows {
+			expr := fmt.Sprintf(
+				`max by () (slok:sli_error_rate:%s{objective_id=~"%s"})`,
+				window, objectiveIDSelector,
+			)
+			*rules = append(*rules, monitoringv1.Rule{
+				Record: fmt.Sprintf("slok:sli_error_rate:%s", window),
+				Expr:   intstr.FromString(expr),
+				Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, window),
+			})
+		}
+
+		return prometheusRule, nil
+	default:
+		// Unsupported composition type
+		return monitoringv1.PrometheusRule{}, fmt.Errorf("unsupported composition type: %s", compositionType)
+	}
+}
 func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv1alpha1.Objective) (monitoringv1.PrometheusRule, error) {
 	objectiveName := objective.Name
 
