@@ -35,11 +35,12 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
 	"github.com/federicolepera/slok/internal/controller"
 	"github.com/federicolepera/slok/internal/correlation"
 	webhookv1alpha1 "github.com/federicolepera/slok/internal/webhook/v1alpha1"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -217,6 +218,13 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "ServiceLevelObjective")
 			os.Exit(1)
 		}
+	}
+	if err := (&controller.SLOCompositionReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SLOComposition")
+		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
