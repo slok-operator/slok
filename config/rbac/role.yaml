@@ -26,6 +26,7 @@ rules:
   - observability.slok.io
   resources:
   - servicelevelobjectives
+  - slocompositions
   - slocorrelations
   verbs:
   - create
@@ -39,12 +40,14 @@ rules:
   - observability.slok.io
   resources:
   - servicelevelobjectives/finalizers
+  - slocompositions/finalizers
   verbs:
   - update
 - apiGroups:
   - observability.slok.io
   resources:
   - servicelevelobjectives/status
+  - slocompositions/status
   - slocorrelations/status
   verbs:
   - get
