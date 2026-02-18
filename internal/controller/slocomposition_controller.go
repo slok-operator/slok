@@ -24,11 +24,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
 	sloklog "github.com/federicolepera/slok/internal/log"
 	"github.com/federicolepera/slok/internal/prometheus"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 )
 
 // SLOCompositionReconciler reconciles a SLOComposition object
@@ -82,10 +84,24 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		sloList = append(sloList, slo)
-		prometheus.CreateAggregatedPrometheusRule(sloComposition.Name, sloComposition.Namespace, sloComposition.Spec.Composition.Type, sloList)
 		logger.Info("Successfully fetched SLO", "name", obj.Name, "namespace", obj.Namespace)
 	}
 
+	desideredRule, _ := prometheus.CreateAggregatedPrometheusRule(sloComposition.Name, sloComposition.Namespace, sloComposition.Spec, sloList)
+	existingRule := &monitoringv1.PrometheusRule{}
+	existingRule.Name = desideredRule.Name
+	existingRule.Namespace = desideredRule.Namespace
+
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, existingRule, func() error {
+		existingRule.Labels = desideredRule.Labels
+		existingRule.Spec = desideredRule.Spec
+		return controllerutil.SetControllerReference(&slo, existingRule, r.Scheme)
+	})
+	if err != nil {
+		logger.Error(err, "unable to create or update Prometheus rule", "prometheus_rule", desideredRule.Name)
+	}
+
+	
 	return ctrl.Result{}, nil
 }
 
