@@ -55,6 +55,10 @@ type SLOCompositionSpec struct {
 
 	// +required
 	Composition Composition `json:"composition"`
+
+	// alerting configures alerting rules (budget and burn rate) for this composition.
+	// +optional
+	Alerting *Alerting `json:"alerting,omitempty"`
 }
 
 // SLOCompositionStatus defines the observed state of SLOComposition.

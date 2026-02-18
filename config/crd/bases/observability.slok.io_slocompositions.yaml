@@ -39,6 +39,113 @@ spec:
           spec:
             description: spec defines the desired state of SLOComposition
             properties:
+              alerting:
+                description: alerting configures alerting rules (budget and burn rate)
+                  for this composition.
+                properties:
+                  budgetErrorAlerts:
+                    description: budgetErrorAlerts configures error budget threshold
+                      alerts.
+                    properties:
+                      alerts:
+                        description: |-
+                          alerts is a list of budget alerting rules.
+                          Each alert specifies a threshold percentage and severity level.
+                        items:
+                          properties:
+                            name:
+                              description: name is the unique identifier for this
+                                budget alert.
+                              minLength: 1
+                              type: string
+                            percent:
+                              description: percent is the error budget remaining threshold
+                                below which the alert fires (e.g., 10.0 means < 10%).
+                              maximum: 100
+                              minimum: 0
+                              type: number
+                            severity:
+                              description: severity is the alert severity level (e.g.,
+                                "critical", "warning").
+                              enum:
+                              - critical
+                              - warning
+                              - info
+                              type: string
+                          required:
+                          - name
+                          - percent
+                          - severity
+                          type: object
+                        type: array
+                      enabled:
+                        description: enabled controls whether budget error alerts
+                          are generated.
+                        type: boolean
+                    required:
+                    - enabled
+                    type: object
+                  burnRateAlerts:
+                    description: burnRateAlerts configures burn rate alerting rules.
+                    properties:
+                      alerts:
+                        description: alerts is a list of custom burn rate alerting
+                          rules.
+                        items:
+                          properties:
+                            consumePercent:
+                              description: |-
+                                consumePercent is the percentage of error budget that would be consumed
+                                within the consumeWindow at the current burn rate to trigger the alert (e.g., 2.0 means 2%).
+                              minimum: 0
+                              type: number
+                            consumeWindow:
+                              description: consumeWindow is the time window used to
+                                compute the burn rate threshold (e.g., "1h", "6h").
+                              pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                              type: string
+                            longWindow:
+                              description: longWindow is the long observation window
+                                for the burn rate query (e.g., "1h").
+                              pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                              type: string
+                            name:
+                              minLength: 1
+                              type: string
+                            severity:
+                              description: severity is the alert severity level (e.g.,
+                                "critical", "warning").
+                              enum:
+                              - critical
+                              - warning
+                              - info
+                              type: string
+                            shortWindow:
+                              description: shortWindow is the short observation window
+                                for the burn rate query (e.g., "5m").
+                              pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                              type: string
+                          required:
+                          - consumePercent
+                          - consumeWindow
+                          - longWindow
+                          - name
+                          - severity
+                          - shortWindow
+                          type: object
+                        type: array
+                      enabled:
+                        description: enabled controls whether burn rate alerts are
+                          generated.
+                        type: boolean
+                    required:
+                    - enabled
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: at least one of budgetErrorAlerts or burnRateAlerts must
+                    be specified
+                  rule: has(self.budgetErrorAlerts) || has(self.burnRateAlerts)
               composition:
                 properties:
                   type:
