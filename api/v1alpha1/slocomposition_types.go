@@ -60,9 +60,15 @@ type SLOCompositionSpec struct {
 	// +optional
 	Alerting *Alerting `json:"alerting,omitempty"`
 }
-
 // SLOCompositionStatus defines the observed state of SLOComposition.
 type SLOCompositionStatus struct {
+	// objectiveComposition represents the current status of the composed objective.
+	// +optional
+	ObjectiveComposition ObjectiveStatus `json:"objectiveComposition,omitempty"`
+
+	// lastUpdateTime indicates the last time the status was updated.
+	// +optional
+	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
@@ -86,6 +92,13 @@ type SLOCompositionStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=sloc
+// +kubebuilder:printcolumn:name="Target",type=number,JSONPath=`.spec.target`,format=float
+// +kubebuilder:printcolumn:name="Window",type=string,JSONPath=`.spec.window`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.objectiveComposition.status`
+// +kubebuilder:printcolumn:name="Actual",type=number,JSONPath=`.status.objectiveComposition.actual`,format=float
+// +kubebuilder:printcolumn:name="Budget %",type=number,JSONPath=`.status.objectiveComposition.errorBudget.percentRemaining`,format=float
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // SLOComposition is the Schema for the slocompositions API
 type SLOComposition struct {

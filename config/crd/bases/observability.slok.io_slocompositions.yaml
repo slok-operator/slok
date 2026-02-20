@@ -11,10 +11,34 @@ spec:
     kind: SLOComposition
     listKind: SLOCompositionList
     plural: slocompositions
+    shortNames:
+    - sloc
     singular: slocomposition
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - format: float
+      jsonPath: .spec.target
+      name: Target
+      type: number
+    - jsonPath: .spec.window
+      name: Window
+      type: string
+    - jsonPath: .status.objectiveComposition.status
+      name: Status
+      type: string
+    - format: float
+      jsonPath: .status.objectiveComposition.actual
+      name: Actual
+      type: number
+    - format: float
+      jsonPath: .status.objectiveComposition.errorBudget.percentRemaining
+      name: Budget %
+      type: number
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: SLOComposition is the Schema for the slocompositions API
@@ -265,6 +289,98 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              lastUpdateTime:
+                description: lastUpdateTime indicates the last time the status was
+                  updated.
+                format: date-time
+                type: string
+              objectiveComposition:
+                description: objectives represent the current status of each objective
+                  defined in the spec.
+                properties:
+                  actual:
+                    description: actual is the current SLI percentage (e.g., 99.87).
+                    type: number
+                  burnRate:
+                    description: burnRate contains the observed burn rate metrics.
+                    items:
+                      description: BurnRateStatus represents the observed burn rate
+                        for an objective.
+                      properties:
+                        longBurnRate:
+                          description: longBurnRate is the burn rate computed over
+                            the long observation window.
+                          type: number
+                        longWindow:
+                          description: longWindow is the duration of the long observation
+                            window (e.g., "1h").
+                          type: string
+                        shortBurnRate:
+                          description: shortBurnRate is the burn rate computed over
+                            the short observation window.
+                          type: number
+                        shortWindow:
+                          description: shortWindow is the duration of the short observation
+                            window (e.g., "5m").
+                          type: string
+                      required:
+                      - longBurnRate
+                      - longWindow
+                      - shortBurnRate
+                      - shortWindow
+                      type: object
+                    type: array
+                  errorBudget:
+                    description: errorBudget contains details about error budget consumption.
+                    properties:
+                      consumed:
+                        description: Consumed error budget so far (e.g., "10.5m")
+                        type: string
+                      percentRemaining:
+                        description: PercentRemaining is the percentage of budget
+                          left (e.g., 75.69)
+                        type: number
+                      remaining:
+                        description: Remaining error budget (e.g., "32.7m")
+                        type: string
+                      total:
+                        description: Total error budget for the window (e.g., "43.2m"
+                          for 43.2 minutes)
+                        type: string
+                    required:
+                    - consumed
+                    - percentRemaining
+                    - remaining
+                    - total
+                    type: object
+                  lastQueried:
+                    description: lastQueried is the timestamp of the last Prometheus
+                      query for this objective.
+                    format: date-time
+                    type: string
+                  name:
+                    description: name of the objective (matches Objective.Name).
+                    type: string
+                  status:
+                    description: status indicates whether the objective is being met.
+                    enum:
+                    - met
+                    - warning
+                    - degraded
+                    - critical
+                    - violated
+                    - unknown
+                    type: string
+                  target:
+                    description: target percentage (copied from spec for convenience).
+                    type: number
+                required:
+                - actual
+                - errorBudget
+                - name
+                - status
+                - target
+                type: object
             type: object
         required:
         - spec
