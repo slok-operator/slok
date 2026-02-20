@@ -222,6 +222,7 @@ func main() {
 	if err := (&controller.SLOCompositionReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		PrometheusURL: prometheusURL,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SLOComposition")
 		os.Exit(1)
