@@ -52,8 +52,8 @@ func calculatePercentage(sliBurnRateWindowed float64, sliErrorRate float64, wind
 	}, math.Round(actual*100) / 100, nil
 }
 
-func Calculate(obj observabilityv1alpha1.Objective, sliBurnRateWindowed float64, sliErrorRate float64) (*Budget, float64, error) {
-	return calculatePercentage(sliBurnRateWindowed, sliErrorRate, obj.Window)
+func Calculate(window string, sliBurnRateWindowed float64, sliErrorRate float64) (*Budget, float64, error) {
+	return calculatePercentage(sliBurnRateWindowed, sliErrorRate, window)
 }
 
 // parseWindow converts window string to duration

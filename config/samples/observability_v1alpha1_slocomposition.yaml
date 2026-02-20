@@ -1,0 +1,9 @@
+apiVersion: observability.slok.io/v1alpha1
+kind: SLOComposition
+metadata:
+  labels:
+    app.kubernetes.io/name: slok
+    app.kubernetes.io/managed-by: kustomize
+  name: slocomposition-sample
+spec:
+  # TODO(user): Add fields here

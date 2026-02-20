@@ -4,6 +4,7 @@
 resources:
 - bases/observability.slok.io_servicelevelobjectives.yaml
 - bases/observability.slok.io_slocorrelations.yaml
+- bases/observability.slok.io_slocompositions.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

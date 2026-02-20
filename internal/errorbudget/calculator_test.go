@@ -3,14 +3,13 @@ package errorbudget
 import (
 	"testing"
 
-	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
 	"github.com/federicolepera/slok/internal/burnrate"
 )
 
 func TestCalculate(t *testing.T) {
 	tests := []struct {
 		name                string
-		objective           observabilityv1alpha1.Objective
+		window              string
 		sliBurnRateWindowed float64
 		sliErrorRate        float64
 		expectedBudget      *Budget
@@ -18,13 +17,8 @@ func TestCalculate(t *testing.T) {
 		expectError         bool
 	}{
 		{
-			name: "Budget exhausted with 30d window",
-			objective: observabilityv1alpha1.Objective{
-				Name:   "availability",
-				Target: 99.9,
-				Window: "30d",
-				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
-			},
+			name:   "Budget exhausted with 30d window",
+			window: "30d",
 			// sliBurnRateWindowed=1.0 → 100% consumed, 0% remaining
 			sliBurnRateWindowed: 1.0,
 			sliErrorRate:        0.005,
@@ -38,13 +32,8 @@ func TestCalculate(t *testing.T) {
 			expectError:    false,
 		},
 		{
-			name: "50% budget remaining with 7d window",
-			objective: observabilityv1alpha1.Objective{
-				Name:   "availability",
-				Target: 99.0,
-				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
-			},
+			name:   "50% budget remaining with 7d window",
+			window: "7d",
 			// sliBurnRateWindowed=0.5 → 50% consumed, 50% remaining
 			sliBurnRateWindowed: 0.5,
 			sliErrorRate:        0.005,
@@ -58,13 +47,8 @@ func TestCalculate(t *testing.T) {
 			expectError:    false,
 		},
 		{
-			name: "Low budget scenario - 9% remaining",
-			objective: observabilityv1alpha1.Objective{
-				Name:   "availability",
-				Target: 99.5,
-				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
-			},
+			name:   "Low budget scenario - 9% remaining",
+			window: "7d",
 			// sliBurnRateWindowed=0.91 → 91% consumed, 9% remaining
 			sliBurnRateWindowed: 0.91,
 			sliErrorRate:        0.00455,
@@ -78,13 +62,8 @@ func TestCalculate(t *testing.T) {
 			expectError:    false,
 		},
 		{
-			name: "Zero burn rate returns full budget",
-			objective: observabilityv1alpha1.Objective{
-				Name:   "availability",
-				Target: 99.9,
-				Window: "7d",
-				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
-			},
+			name:   "Zero burn rate returns full budget",
+			window: "7d",
 			// sliBurnRateWindowed=0 → 0% consumed, 100% remaining
 			sliBurnRateWindowed: 0,
 			sliErrorRate:        0,
@@ -98,13 +77,8 @@ func TestCalculate(t *testing.T) {
 			expectError:    false,
 		},
 		{
-			name: "Over-burned budget clamps to zero",
-			objective: observabilityv1alpha1.Objective{
-				Name:   "availability",
-				Target: 99.9,
-				Window: "1d",
-				Sli:    observabilityv1alpha1.SLI{Query: &observabilityv1alpha1.Query{TotalQuery: "dummy_total", ErrorQuery: "dummy_error"}},
-			},
+			name:   "Over-burned budget clamps to zero",
+			window: "1d",
 			// sliBurnRateWindowed=1.5 → over 100% consumed, remaining clamped to 0
 			sliBurnRateWindowed: 1.5,
 			sliErrorRate:        0.01,
@@ -120,7 +94,7 @@ func TestCalculate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			budget, actual, err := Calculate(tt.objective, tt.sliBurnRateWindowed, tt.sliErrorRate)
+			budget, actual, err := Calculate(tt.window, tt.sliBurnRateWindowed, tt.sliErrorRate)
 			if (err != nil) != tt.expectError {
 				t.Errorf("Calculate() error = %v, expectError %v", err, tt.expectError)
 				return

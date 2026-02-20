@@ -1,4 +1,5 @@
 ## Append samples of your project ##
 resources:
 - observability_v1alpha1_servicelevelobjective.yaml
+- observability_v1alpha1_slocomposition.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

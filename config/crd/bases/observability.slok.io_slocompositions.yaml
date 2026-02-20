@@ -1,0 +1,391 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: slocompositions.observability.slok.io
+spec:
+  group: observability.slok.io
+  names:
+    kind: SLOComposition
+    listKind: SLOCompositionList
+    plural: slocompositions
+    shortNames:
+    - sloc
+    singular: slocomposition
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - format: float
+      jsonPath: .spec.target
+      name: Target
+      type: number
+    - jsonPath: .spec.window
+      name: Window
+      type: string
+    - jsonPath: .status.objectiveComposition.status
+      name: Status
+      type: string
+    - format: float
+      jsonPath: .status.objectiveComposition.actual
+      name: Actual
+      type: number
+    - format: float
+      jsonPath: .status.objectiveComposition.errorBudget.percentRemaining
+      name: Budget %
+      type: number
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: SLOComposition is the Schema for the slocompositions API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of SLOComposition
+            properties:
+              alerting:
+                description: alerting configures alerting rules (budget and burn rate)
+                  for this composition.
+                properties:
+                  budgetErrorAlerts:
+                    description: budgetErrorAlerts configures error budget threshold
+                      alerts.
+                    properties:
+                      alerts:
+                        description: |-
+                          alerts is a list of budget alerting rules.
+                          Each alert specifies a threshold percentage and severity level.
+                        items:
+                          properties:
+                            name:
+                              description: name is the unique identifier for this
+                                budget alert.
+                              minLength: 1
+                              type: string
+                            percent:
+                              description: percent is the error budget remaining threshold
+                                below which the alert fires (e.g., 10.0 means < 10%).
+                              maximum: 100
+                              minimum: 0
+                              type: number
+                            severity:
+                              description: severity is the alert severity level (e.g.,
+                                "critical", "warning").
+                              enum:
+                              - critical
+                              - warning
+                              - info
+                              type: string
+                          required:
+                          - name
+                          - percent
+                          - severity
+                          type: object
+                        type: array
+                      enabled:
+                        description: enabled controls whether budget error alerts
+                          are generated.
+                        type: boolean
+                    required:
+                    - enabled
+                    type: object
+                  burnRateAlerts:
+                    description: burnRateAlerts configures burn rate alerting rules.
+                    properties:
+                      alerts:
+                        description: alerts is a list of custom burn rate alerting
+                          rules.
+                        items:
+                          properties:
+                            consumePercent:
+                              description: |-
+                                consumePercent is the percentage of error budget that would be consumed
+                                within the consumeWindow at the current burn rate to trigger the alert (e.g., 2.0 means 2%).
+                              minimum: 0
+                              type: number
+                            consumeWindow:
+                              description: consumeWindow is the time window used to
+                                compute the burn rate threshold (e.g., "1h", "6h").
+                              pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                              type: string
+                            longWindow:
+                              description: longWindow is the long observation window
+                                for the burn rate query (e.g., "1h").
+                              pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                              type: string
+                            name:
+                              minLength: 1
+                              type: string
+                            severity:
+                              description: severity is the alert severity level (e.g.,
+                                "critical", "warning").
+                              enum:
+                              - critical
+                              - warning
+                              - info
+                              type: string
+                            shortWindow:
+                              description: shortWindow is the short observation window
+                                for the burn rate query (e.g., "5m").
+                              pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                              type: string
+                          required:
+                          - consumePercent
+                          - consumeWindow
+                          - longWindow
+                          - name
+                          - severity
+                          - shortWindow
+                          type: object
+                        type: array
+                      enabled:
+                        description: enabled controls whether burn rate alerts are
+                          generated.
+                        type: boolean
+                    required:
+                    - enabled
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: at least one of budgetErrorAlerts or burnRateAlerts must
+                    be specified
+                  rule: has(self.budgetErrorAlerts) || has(self.burnRateAlerts)
+              composition:
+                properties:
+                  type:
+                    enum:
+                    - AND_MIN
+                    type: string
+                required:
+                - type
+                type: object
+              description:
+                description: description is an optional human-readable description
+                  of the SLO.
+                type: string
+              objectives:
+                items:
+                  properties:
+                    name:
+                      description: name is the name of the objective (e.g., "availability",
+                        "latency").
+                      type: string
+                    namespace:
+                      description: '* optional namespace for the objective, if not
+                        specified it will be assumed to be in the same namespace as
+                        the SLOComposition.'
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              target:
+                description: target is the target percentage for the objective (e.g.,
+                  99.9).
+                maximum: 200
+                minimum: 0
+                type: number
+              window:
+                description: |-
+                  window is the time window over which the objective is measured (e.g., "30d" for 30 days).
+                  Only days are supported (e.g., "7d", "30d").
+                pattern: ^\d+d$
+                type: string
+            required:
+            - composition
+            - objectives
+            - target
+            - window
+            type: object
+          status:
+            description: status defines the observed state of SLOComposition
+            properties:
+              conditions:
+                description: |-
+                  conditions represent the current state of the SLOComposition resource.
+                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
+
+                  Standard condition types include:
+                  - "Available": the resource is fully functional
+                  - "Progressing": the resource is being created or updated
+                  - "Degraded": the resource failed to reach or maintain its desired state
+
+                  The status of each condition is one of True, False, or Unknown.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastUpdateTime:
+                description: lastUpdateTime indicates the last time the status was
+                  updated.
+                format: date-time
+                type: string
+              objectiveComposition:
+                description: objectives represent the current status of each objective
+                  defined in the spec.
+                properties:
+                  actual:
+                    description: actual is the current SLI percentage (e.g., 99.87).
+                    type: number
+                  burnRate:
+                    description: burnRate contains the observed burn rate metrics.
+                    items:
+                      description: BurnRateStatus represents the observed burn rate
+                        for an objective.
+                      properties:
+                        longBurnRate:
+                          description: longBurnRate is the burn rate computed over
+                            the long observation window.
+                          type: number
+                        longWindow:
+                          description: longWindow is the duration of the long observation
+                            window (e.g., "1h").
+                          type: string
+                        shortBurnRate:
+                          description: shortBurnRate is the burn rate computed over
+                            the short observation window.
+                          type: number
+                        shortWindow:
+                          description: shortWindow is the duration of the short observation
+                            window (e.g., "5m").
+                          type: string
+                      required:
+                      - longBurnRate
+                      - longWindow
+                      - shortBurnRate
+                      - shortWindow
+                      type: object
+                    type: array
+                  errorBudget:
+                    description: errorBudget contains details about error budget consumption.
+                    properties:
+                      consumed:
+                        description: Consumed error budget so far (e.g., "10.5m")
+                        type: string
+                      percentRemaining:
+                        description: PercentRemaining is the percentage of budget
+                          left (e.g., 75.69)
+                        type: number
+                      remaining:
+                        description: Remaining error budget (e.g., "32.7m")
+                        type: string
+                      total:
+                        description: Total error budget for the window (e.g., "43.2m"
+                          for 43.2 minutes)
+                        type: string
+                    required:
+                    - consumed
+                    - percentRemaining
+                    - remaining
+                    - total
+                    type: object
+                  lastQueried:
+                    description: lastQueried is the timestamp of the last Prometheus
+                      query for this objective.
+                    format: date-time
+                    type: string
+                  name:
+                    description: name of the objective (matches Objective.Name).
+                    type: string
+                  status:
+                    description: status indicates whether the objective is being met.
+                    enum:
+                    - met
+                    - warning
+                    - degraded
+                    - critical
+                    - violated
+                    - unknown
+                    type: string
+                  target:
+                    description: target percentage (copied from spec for convenience).
+                    type: number
+                required:
+                - actual
+                - errorBudget
+                - name
+                - status
+                - target
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

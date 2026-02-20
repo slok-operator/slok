@@ -508,6 +508,93 @@ Budget alerts tell you *how much* budget is left. Burn rate alerts tell you *how
 it is being consumed. Using both gives you coverage for slow, sustained degradation
 (caught by budget alerts) and sudden spikes (caught by burn rate alerts).
 
+## SLO Composition ⚠️ Work in Progress
+
+> **This feature is under active development and not yet production-ready.**
+> The API and generated Prometheus rules may change in future releases.
+
+SLO Composition allows you to define a higher-level reliability target that aggregates multiple individual SLOs into a single composite view. This is useful when the health of a user journey (e.g. a checkout flow) depends on the availability of several independent services.
+
+### How It Works
+
+SLOK introduces a new CRD: `SLOComposition`. It references a set of existing `ServiceLevelObjective` resources and combines their error rates using a **composition strategy**. The result is a set of Prometheus recording rules and alerts that operate on the aggregated signal.
+
+Currently supported strategy:
+
+| Strategy | Description |
+|----------|-------------|
+| `AND_MIN` | The composition is healthy only when **all** referenced SLOs are healthy. The error rate is taken as the `max` across all objectives (worst-case). |
+
+### Generated Recording Rules
+
+For each composition SLOK generates the following recording rules:
+
+| Rule | Expression | Purpose |
+|------|-----------|---------|
+| `slok:sli_error_composition_rate:WINDOW` | `max by () (slok:sli_error_rate:WINDOW{objective_id=~"..."})` | Worst-case error rate across all SLOs |
+| `slok:objective_target_composition` | `vector(target / 100)` | Composition target constant |
+| `slok:error_budget_target_composition` | `vector(1 - target / 100)` | Allowed error fraction |
+| `slok:burn_rate_composition:WINDOW` | `slok:sli_error_composition_rate:WINDOW / slok:error_budget_target_composition` | Composition burn rate |
+
+### Example
+
+```yaml
+apiVersion: observability.slok.io/v1alpha1
+kind: SLOComposition
+metadata:
+  name: example-app-slo-composition
+  namespace: default
+spec:
+  target: 99.9
+  window: 30d
+  objectives:
+    - name: example-app-slo
+    - name: k8s-apiserver-availability-slo
+  composition:
+    type: AND_MIN
+```
+
+Apply it with:
+
+```bash
+kubectl apply -f k8s/1-sloComp.yaml
+```
+
+### Alerting
+
+Burn rate alerts for compositions follow the same multi-window, multi-burn-rate approach as single SLOs. Enable them via the `alerting` field:
+
+```yaml
+spec:
+  target: 99.9
+  window: 30d
+  objectives:
+    - name: example-app-slo
+    - name: k8s-apiserver-availability-slo
+  composition:
+    type: AND_MIN
+  alerting:
+    burnRateAlerts:
+      enabled: true
+```
+
+When enabled, SLOK generates the same preset alerts as for single SLOs, but referencing the `slok:burn_rate_composition` recording rules:
+
+| Alert | Short Window | Long Window | Burn Rate | Severity |
+|-------|-------------|-------------|-----------|----------|
+| `Composition: X SLOBurnRateHigh - Critical` | 5m | 1h | >14x | critical |
+| `Composition: X SLOBurnRateHigh - Degraded` | 1h | 6h | >6x | warning |
+| `Composition: X SLOBurnRateHigh - Warning` | 6h | 3d | >1x | warning |
+| `Composition: X ErrorBudget Finished - Violated` | -- | composition window | -- | warning |
+
+### Known Limitations (WIP)
+
+- Only `AND_MIN` composition type is supported.
+- The composition status is not yet reflected back in the `SLOComposition` resource status.
+- Budget error alerts (`budgetErrorAlerts`) are not yet supported for compositions.
+
+---
+
 ## Event Correlation
 
 SLOK automatically correlates SLO degradation with cluster changes to help identify root causes. When a burn rate spike is detected, SLOK creates an `SLOCorrelation` resource that lists recent changes that may have caused the problem.
