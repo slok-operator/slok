@@ -97,6 +97,7 @@ kubectl get pods -n slok-system
 
 # Check CRDs are installed
 kubectl get crd servicelevelobjectives.observability.slok.io
+kubectl get crd slocompositions.observability.slok.io
 kubectl get crd slocorrelations.observability.slok.io
 ```
 
@@ -508,10 +509,7 @@ Budget alerts tell you *how much* budget is left. Burn rate alerts tell you *how
 it is being consumed. Using both gives you coverage for slow, sustained degradation
 (caught by budget alerts) and sudden spikes (caught by burn rate alerts).
 
-## SLO Composition ⚠️ Work in Progress
-
-> **This feature is under active development and not yet production-ready.**
-> The API and generated Prometheus rules may change in future releases.
+## SLO Composition
 
 SLO Composition allows you to define a higher-level reliability target that aggregates multiple individual SLOs into a single composite view. This is useful when the health of a user journey (e.g. a checkout flow) depends on the availability of several independent services.
 
@@ -560,6 +558,50 @@ Apply it with:
 kubectl apply -f k8s/1-sloComp.yaml
 ```
 
+### Check Composition Status
+
+```bash
+# Quick overview (shortName: sloc)
+kubectl get sloc
+```
+
+Output:
+```
+NAME                          TARGET   WINDOW   STATUS   ACTUAL   BUDGET %   AGE
+example-app-slo-composition   99.9     30d      met      99.95    72.4       15d
+```
+
+```bash
+# Full status detail
+kubectl get sloc example-app-slo-composition -o yaml
+```
+
+Output:
+```yaml
+status:
+  objectiveComposition:
+    name: example-app-slo-composition
+    target: 99.9
+    actual: 99.95
+    status: met
+    errorBudget:
+      total: "43200.0m"
+      consumed: "11980.8m"
+      remaining: "31219.2m"
+      percentRemaining: 72.4
+    burnRate:
+      - shortWindow: "5m"
+        shortBurnRate: 0.3
+        longWindow: "1h"
+        longBurnRate: 0.32
+    lastQueried: "2026-02-20T10:30:00Z"
+  lastUpdateTime: "2026-02-20T10:30:00Z"
+  conditions:
+    - type: Available
+      status: "True"
+      reason: Reconciled
+```
+
 ### Alerting
 
 Burn rate alerts for compositions follow the same multi-window, multi-burn-rate approach as single SLOs. Enable them via the `alerting` field:
@@ -587,11 +629,10 @@ When enabled, SLOK generates the same preset alerts as for single SLOs, but refe
 | `Composition: X SLOBurnRateHigh - Warning` | 6h | 3d | >1x | warning |
 | `Composition: X ErrorBudget Finished - Violated` | -- | composition window | -- | warning |
 
-### Known Limitations (WIP)
+### Limitations
 
-- Only `AND_MIN` composition type is supported.
-- The composition status is not yet reflected back in the `SLOComposition` resource status.
-- Budget error alerts (`budgetErrorAlerts`) are not yet supported for compositions.
+- Only the `AND_MIN` composition type is supported.
+- Budget error alerts (`budgetErrorAlerts`) are not yet supported for compositions; only burn rate alerts are available.
 
 ---
 
