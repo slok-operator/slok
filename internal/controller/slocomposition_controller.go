@@ -18,6 +18,8 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,8 +30,11 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
+	"github.com/federicolepera/slok/internal/burnrate"
+	"github.com/federicolepera/slok/internal/errorbudget"
 	sloklog "github.com/federicolepera/slok/internal/log"
 	"github.com/federicolepera/slok/internal/prometheus"
+	"github.com/federicolepera/slok/internal/slostatus"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 )
 
@@ -37,6 +42,8 @@ import (
 type SLOCompositionReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	PrometheusClient prometheus.PrometheusClient
+	PrometheusURL    string
 }
 
 // +kubebuilder:rbac:groups=observability.slok.io,resources=slocompositions,verbs=get;list;watch;create;update;patch;delete
@@ -59,6 +66,26 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.Get(ctx, req.NamespacedName, &sloComposition); err != nil {
 		logger.Error(err, "unable to fetch SLOComposition")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	// Initialize Prometheus client if not already done
+	if r.PrometheusClient == nil {
+		if r.PrometheusURL == "" {
+			promURL := "http://localhost:9090" // Default Prometheus URL
+			r.PrometheusURL = promURL
+		}
+		if promClient, err := prometheus.NewClient(r.PrometheusURL); err != nil {
+			logger.Error(err, "unable to create Prometheus client", "prometheus_url", r.PrometheusURL)
+			return ctrl.Result{}, err
+		} else {
+			r.PrometheusClient = promClient
+			logger.Info("prometheus client initialized", "prometheus_url", r.PrometheusURL)
+		}
+	}
+
+	// Check Prometheus connection
+	if err := r.PrometheusClient.CheckConnection(ctx); err != nil {
+		logger.Error(err, "unable to connect to Prometheus", "prometheus_url", r.PrometheusURL)
+		return ctrl.Result{}, err
 	}
 
 	var slo observabilityv1alpha1.ServiceLevelObjective
@@ -87,22 +114,117 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		logger.Info("Successfully fetched SLO", "name", obj.Name, "namespace", obj.Namespace)
 	}
 
-	desideredRule, _ := prometheus.CreateAggregatedPrometheusRule(sloComposition.Name, sloComposition.Namespace, sloComposition.Spec, sloList)
-	existingRule := &monitoringv1.PrometheusRule{}
-	existingRule.Name = desideredRule.Name
-	existingRule.Namespace = desideredRule.Namespace
-
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, existingRule, func() error {
-		existingRule.Labels = desideredRule.Labels
-		existingRule.Spec = desideredRule.Spec
-		return controllerutil.SetControllerReference(&slo, existingRule, r.Scheme)
-	})
+	desiredRule, err := prometheus.CreateAggregatedPrometheusRule(sloComposition.Name, sloComposition.Namespace, sloComposition.Spec, sloList)
 	if err != nil {
-		logger.Error(err, "unable to create or update Prometheus rule", "prometheus_rule", desideredRule.Name)
+		logger.Error(err, "unable to create Prometheus rule", "objective_name", sloComposition.Name)
+	} else {
+		existingRule := &monitoringv1.PrometheusRule{}
+		existingRule.Name = desiredRule.Name
+		existingRule.Namespace = desiredRule.Namespace
+
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, existingRule, func() error {
+			existingRule.Labels = desiredRule.Labels
+			existingRule.Spec = desiredRule.Spec
+			return controllerutil.SetControllerReference(&slo, existingRule, r.Scheme)
+		})
+		if err != nil {
+			logger.Error(err, "unable to create or update Prometheus rule", "prometheus_rule", desiredRule.Name)
+		}
+	}
+	sliErrorRate5mQuery := fmt.Sprintf("slok:sli_error_composition_rate:5m{slo_composition_name=\"%s\",slo_composition_namespace=\"%s\"}", sloComposition.Name, sloComposition.Namespace)
+	sliErrorRate5m, err := r.PrometheusClient.QuerySLI(ctx, sliErrorRate5mQuery)
+	if err != nil {
+		logger.Error(err, "unable to query SLI error rate for 5m window", "sli_query", sliErrorRate5mQuery)
+		sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Tartget)
+		sloComposition.Status.LastUpdateTime = metav1.Now()
+		meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{
+			Type:   "Available",
+			Status: metav1.ConditionFalse,
+			Reason: "QueryFailed",
+		})
+		if err := r.Status().Update(ctx, &sloComposition); err != nil {
+			logger.Error(err, "Failed to update SLO status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+	}
+	logger.Info("SLI error rate for 5m window", "sloCompositionName", sloComposition.Name, "sli_error_rate_5m", sliErrorRate5m)
+
+	sliBurnRateWindowedQuery := fmt.Sprintf("slok:burn_rate_composition:%s{slo_composition_name=\"%s\",slo_composition_namespace=\"%s\"}", sloComposition.Spec.Window, sloComposition.Name, sloComposition.Namespace)
+	sliBurnRateWindowed, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateWindowedQuery)
+	if err != nil {
+		logger.Error(err, "unable to query SLI burn rate windowed", "sli_query", sliBurnRateWindowedQuery)
+		sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Tartget)
+		sloComposition.Status.LastUpdateTime = metav1.Now()
+		meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{
+			Type:   "Available",
+			Status: metav1.ConditionFalse,
+			Reason: "QueryFailed",
+		})
+		if err := r.Status().Update(ctx, &sloComposition); err != nil {
+			logger.Error(err, "Failed to update SLO status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 
-	
-	return ctrl.Result{}, nil
+	budget, sliValue, err := errorbudget.Calculate(sloComposition.Spec.Window, sliBurnRateWindowed, sliErrorRate5m)
+	if err != nil {
+		logger.Error(err, "unable to calculate error budget", "objective_name", sloComposition.Name)
+		sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Tartget)
+		sloComposition.Status.LastUpdateTime = metav1.Now()
+		meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{
+			Type:   "Available",
+			Status: metav1.ConditionFalse,
+			Reason: "CalculationFailed",
+		})
+		if err := r.Status().Update(ctx, &sloComposition); err != nil {
+			logger.Error(err, "Failed to update SLO status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+	}
+
+	var burnRates []burnrate.BurnRate
+	for _, preset := range defaultBurnRatePresets {
+		sliBurnRateShortQuery := fmt.Sprintf("slok:burn_rate_composition:%s{slo_composition_name=\"%s\",slo_composition_namespace=\"%s\"}", preset.ShortWindow, sloComposition.Name, sloComposition.Namespace)
+		sliBurnRateShortLongQuery := fmt.Sprintf("slok:burn_rate_composition:%s{slo_composition_name=\"%s\",slo_composition_namespace=\"%s\"}", preset.LongWindow, sloComposition.Name, sloComposition.Namespace)
+		sliBurnRateShort, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateShortQuery)
+		if err != nil {
+			logger.Error(err, "unable to query SLI for short burn rate", "sli_query", sliBurnRateShortQuery)
+			continue
+		}
+		sliBurnRateLong, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateShortLongQuery)
+		if err != nil {
+			logger.Error(err, "unable to query SLI for long burn rate", "sli_query", sliBurnRateShortLongQuery)
+			continue
+		}
+		burnRates = append(burnRates, burnrate.BurnRate{
+			ShortBurnRate: sliBurnRateShort,
+			LongBurnRate:  sliBurnRateLong,
+			ShortWindow:   preset.ShortWindow,
+			LongWindow:    preset.LongWindow,
+		})
+	}
+
+	status := errorbudget.DetermineStatus(sloComposition.Spec.Tartget, sliValue, budget.PercentRemaining, burnRates)
+	sloComposition.Status.ObjectiveComposition = slostatus.BuildSuccessStatus(sloComposition.Name, sloComposition.Spec.Tartget, sliValue, budget, status, slostatus.BuildBurnRateStatuses(burnRates))
+	sloComposition.Status.LastUpdateTime = metav1.Now()
+
+	meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{
+		Type:   "Available",
+		Status: metav1.ConditionTrue,
+		Reason: "Reconciled",
+	})
+	if err := r.Status().Update(ctx, &sloComposition); err != nil {
+		logger.Error(err, "Failed to update SLOComposition status")
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("Successfully reconciled SLOComposition")
+
+	// Requeue after 1 minute
+	return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

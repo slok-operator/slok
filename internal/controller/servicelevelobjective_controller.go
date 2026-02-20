@@ -19,13 +19,13 @@ package controller
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/federicolepera/slok/internal/burnrate"
 	"github.com/federicolepera/slok/internal/correlation"
 	"github.com/federicolepera/slok/internal/errorbudget"
 	sloklog "github.com/federicolepera/slok/internal/log"
+	"github.com/federicolepera/slok/internal/slostatus"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -114,7 +114,6 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 	logger.Info("init reconcile ServiceLevelObjective", "name", slo.Name)
 
 	obj := slo.Spec.Objective
-	var objectiveStatus observabilityv1alpha1.ObjectiveStatus
 
 	desiredRule, err := prometheus.CreatePrometheusRule(slo.Name, slo.Namespace, obj)
 	if err != nil {
@@ -139,20 +138,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 	sliErrorRate5m, err := r.PrometheusClient.QuerySLI(ctx, sliErrorRate5mQuery)
 	if err != nil {
 		logger.Error(err, "unable to query SLI error rate for 5m window", "sli_query", sliErrorRate5mQuery)
-		objectiveStatus = observabilityv1alpha1.ObjectiveStatus{
-			Name:   obj.Name,
-			Target: obj.Target,
-			Actual: 0,
-			Status: observabilityv1alpha1.ObjectiveConditionUnknown,
-			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-				Total:            "unknown",
-				Consumed:         "unknown",
-				Remaining:        "unknown",
-				PercentRemaining: 0,
-			},
-			LastQueried: metav1.Now(),
-		}
-		slo.Status.Objective = objectiveStatus
+		slo.Status.Objective = slostatus.BuildUnknownStatus(obj.Name, obj.Target)
 		slo.Status.LastUpdateTime = metav1.Now()
 		meta.SetStatusCondition(&slo.Status.Conditions, metav1.Condition{
 			Type:   "Available",
@@ -171,20 +157,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 	sliBurnRateWindowed, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateWindowedQuery)
 	if err != nil {
 		logger.Error(err, "unable to query SLI burn rate windowed", "sli_query", sliBurnRateWindowedQuery)
-		objectiveStatus = observabilityv1alpha1.ObjectiveStatus{
-			Name:   obj.Name,
-			Target: obj.Target,
-			Actual: 0,
-			Status: observabilityv1alpha1.ObjectiveConditionUnknown,
-			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-				Total:            "unknown",
-				Consumed:         "unknown",
-				Remaining:        "unknown",
-				PercentRemaining: 0,
-			},
-			LastQueried: metav1.Now(),
-		}
-		slo.Status.Objective = objectiveStatus
+		slo.Status.Objective = slostatus.BuildUnknownStatus(obj.Name, obj.Target)
 		slo.Status.LastUpdateTime = metav1.Now()
 		meta.SetStatusCondition(&slo.Status.Conditions, metav1.Condition{
 			Type:   "Available",
@@ -198,23 +171,10 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 
-	budget, sliValue, err := errorbudget.Calculate(obj, sliBurnRateWindowed, sliErrorRate5m)
+	budget, sliValue, err := errorbudget.Calculate(obj.Window, sliBurnRateWindowed, sliErrorRate5m)
 	if err != nil {
 		logger.Error(err, "unable to calculate error budget", "objective_name", obj.Name)
-		objectiveStatus = observabilityv1alpha1.ObjectiveStatus{
-			Name:   obj.Name,
-			Target: obj.Target,
-			Actual: 0,
-			Status: observabilityv1alpha1.ObjectiveConditionUnknown,
-			ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-				Total:            "unknown",
-				Consumed:         "unknown",
-				Remaining:        "unknown",
-				PercentRemaining: 0,
-			},
-			LastQueried: metav1.Now(),
-		}
-		slo.Status.Objective = objectiveStatus
+		slo.Status.Objective = slostatus.BuildUnknownStatus(obj.Name, obj.Target)
 		slo.Status.LastUpdateTime = metav1.Now()
 		meta.SetStatusCondition(&slo.Status.Conditions, metav1.Condition{
 			Type:   "Available",
@@ -250,16 +210,9 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		})
 	}
 
-	var burnRateStatuses []observabilityv1alpha1.BurnRateStatus
 	status := errorbudget.DetermineStatus(obj.Target, sliValue, budget.PercentRemaining, burnRates)
 	for _, br := range burnRates {
 		logger.Info("Burn rate for objective", "objective_name", obj.Name, "short_window", br.ShortWindow, "long_window", br.LongWindow, "short_burn_rate", br.ShortBurnRate, "long_burn_rate", br.LongBurnRate)
-		burnRateStatuses = append(burnRateStatuses, observabilityv1alpha1.BurnRateStatus{
-			LongBurnRate:  br.LongBurnRate,
-			ShortBurnRate: br.ShortBurnRate,
-			LongWindow:    br.LongWindow,
-			ShortWindow:   br.ShortWindow,
-		})
 	}
 
 	// Check for burn rate spike and create correlation if needed
@@ -311,22 +264,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		}
 	}
 
-	objectiveStatus = observabilityv1alpha1.ObjectiveStatus{
-		Name:   obj.Name,
-		Target: obj.Target,
-		Actual: math.Round(sliValue*100) / 100,
-		Status: status,
-		ErrorBudget: observabilityv1alpha1.ErrorBudgetStatus{
-			Total:            budget.Total,
-			Consumed:         budget.Consumed,
-			Remaining:        budget.Remaining,
-			PercentRemaining: budget.PercentRemaining,
-		},
-		BurnRate:    burnRateStatuses,
-		LastQueried: metav1.Now(),
-	}
-
-	slo.Status.Objective = objectiveStatus
+	slo.Status.Objective = slostatus.BuildSuccessStatus(obj.Name, obj.Target, sliValue, budget, status, slostatus.BuildBurnRateStatuses(burnRates))
 	slo.Status.LastUpdateTime = metav1.Now()
 
 	meta.SetStatusCondition(&slo.Status.Conditions, metav1.Condition{
