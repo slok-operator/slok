@@ -172,11 +172,33 @@ spec:
                   rule: has(self.budgetErrorAlerts) || has(self.burnRateAlerts)
               composition:
                 properties:
+                  params:
+                    properties:
+                      routes:
+                        items:
+                          properties:
+                            chain:
+                              items:
+                                type: string
+                              type: array
+                            name:
+                              type: string
+                            weight:
+                              type: number
+                          required:
+                          - chain
+                          - name
+                          - weight
+                          type: object
+                        type: array
+                    type: object
                   type:
                     enum:
                     - AND_MIN
+                    - WEIGHTED_ROUTES
                     type: string
                 required:
+                - params
                 - type
                 type: object
               description:
@@ -187,16 +209,25 @@ spec:
                 items:
                   properties:
                     name:
-                      description: name is the name of the objective (e.g., "availability",
-                        "latency").
+                      description: name is the name of the SLO resource being referenced.
                       type: string
-                    namespace:
-                      description: '* optional namespace for the objective, if not
-                        specified it will be assumed to be in the same namespace as
-                        the SLOComposition.'
-                      type: string
+                    ref:
+                      properties:
+                        name:
+                          description: name is the name of the objective (e.g., "availability",
+                            "latency").
+                          type: string
+                        namespace:
+                          description: '* optional namespace for the objective, if
+                            not specified it will be assumed to be in the same namespace
+                            as the SLOComposition.'
+                          type: string
+                      required:
+                      - name
+                      type: object
                   required:
                   - name
+                  - ref
                   type: object
                 type: array
               target:
@@ -295,8 +326,8 @@ spec:
                 format: date-time
                 type: string
               objectiveComposition:
-                description: objectives represent the current status of each objective
-                  defined in the spec.
+                description: objectiveComposition represents the current status of
+                  the composed objective.
                 properties:
                   actual:
                     description: actual is the current SLI percentage (e.g., 99.87).

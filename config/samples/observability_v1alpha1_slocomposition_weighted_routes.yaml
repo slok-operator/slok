@@ -1,0 +1,148 @@
+# ============================================================================
+# WEIGHTED_ROUTES SLOComposition — full example
+# ============================================================================
+#
+# Scenario: e-commerce checkout with two alternative request paths
+#
+#   90% of requests → no-coupon:   base → payments
+#   10% of requests → with-coupon: base → coupon → payments
+#
+# Composed error rate formula:
+#
+#   e_total = 1 - (
+#     0.9 * (1 - e_base) * (1 - e_payments)
+#     +
+#     0.1 * (1 - e_base) * (1 - e_coupon) * (1 - e_payments)
+#   )
+#
+# Each "chain" is a sequence of services that must ALL succeed for
+# the request to succeed (implicit AND). The success rate of a chain
+# is therefore the product of the individual success rates.
+# Weights must sum to 1.0 and represent the relative traffic share
+# of each route.
+#
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# SLO 1 — Base checkout service
+# ----------------------------------------------------------------------------
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: checkout-base-slo
+  namespace: app
+spec:
+  displayName: "Checkout Base"
+  objective:
+    name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      query:
+        # All requests to the base service
+        totalQuery: http_requests_total{service="checkout-base"}
+        # Only 5xx error requests
+        errorQuery: http_requests_total{service="checkout-base",status=~"5.."}
+
+---
+# ----------------------------------------------------------------------------
+# SLO 2 — Payments service
+# ----------------------------------------------------------------------------
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: payments-slo
+  namespace: app
+spec:
+  displayName: "Payments"
+  objective:
+    name: availability
+    target: 99.95
+    window: 30d
+    sli:
+      query:
+        totalQuery: http_requests_total{service="payments"}
+        errorQuery: http_requests_total{service="payments",status=~"5.."}
+
+---
+# ----------------------------------------------------------------------------
+# SLO 3 — Coupon service (used only on the 10% with-coupon path)
+# ----------------------------------------------------------------------------
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: coupon-slo
+  namespace: app
+spec:
+  displayName: "Coupon"
+  objective:
+    name: availability
+    target: 99.5
+    window: 30d
+    sli:
+      query:
+        totalQuery: http_requests_total{service="coupon"}
+        errorQuery: http_requests_total{service="coupon",status=~"5.."}
+
+---
+# ----------------------------------------------------------------------------
+# SLOComposition — WEIGHTED_ROUTES
+# ----------------------------------------------------------------------------
+apiVersion: observability.slok.io/v1alpha1
+kind: SLOComposition
+metadata:
+  name: checkout-weighted
+  namespace: app
+spec:
+  # Target availability percentage for the composed SLO.
+  target: 99.9
+
+  # Observation window. Must match one of the supported windows (7d or 30d).
+  window: 30d
+
+  # objectives: maps logical aliases to actual Kubernetes SLO resources.
+  # Aliases are referenced in route chains, decoupling logical names
+  # from Kubernetes resource names.
+  objectives:
+    - name: base       # alias used in route chains
+      ref:
+        name: checkout-base-slo   # ServiceLevelObjective resource name
+        namespace: app            # if omitted, inherits the composition namespace
+
+    - name: payments
+      ref:
+        name: payments-slo
+        namespace: app
+
+    - name: coupon
+      ref:
+        name: coupon-slo
+        namespace: app
+
+  composition:
+    type: WEIGHTED_ROUTES
+
+    params:
+      routes:
+        # Main path: no coupon applied (90% of traffic).
+        # Route success rate = (1 - e_base) * (1 - e_payments)
+        - name: no-coupon
+          weight: 0.9          # value in [0, 1]; all weights must sum to 1.0
+          chain:
+            - base             # aliases defined in objectives, executed in order
+            - payments
+
+        # Coupon path: coupon service is called between base and payments (10% of traffic).
+        # Route success rate = (1 - e_base) * (1 - e_coupon) * (1 - e_payments)
+        - name: with-coupon
+          weight: 0.1
+          chain:
+            - base
+            - coupon           # inserted between base and payments
+            - payments
+
+  # alerting is optional. When enabled, generates PrometheusRule resources
+  # for error budget and burn rate alerts on the composition.
+  alerting:
+    burnRateAlerts:
+      enabled: true

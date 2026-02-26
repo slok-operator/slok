@@ -19,10 +19,19 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+type Route struct {
+	Name string `json:"name"`
+	Weight float64 `json:"weight"`
+	Chain []string`json:"chain"`
+}
+type CompositionParams struct {
+	Routes []Route `json:"routes,omitempty"`
+}
 type Composition struct {
 	// +required
-	// +kubebuilder:validation:Enum=AND_MIN
+	// +kubebuilder:validation:Enum=AND_MIN;WEIGHTED_ROUTES
 	Type string `json:"type"`
+	Params CompositionParams `json:"params"`
 }
 type SLOObjective struct {
 	// name is the name of the objective (e.g., "availability", "latency").
@@ -31,6 +40,13 @@ type SLOObjective struct {
 
 	// * optional namespace for the objective, if not specified it will be assumed to be in the same namespace as the SLOComposition.
 	Namespace string `json:"namespace,omitempty"`
+}
+type SLORef struct {
+	// name is the name of the SLO resource being referenced.
+	// +required
+	Name string `json:"name"`
+	
+	Ref SLOObjective `json:"ref"`
 }
 // SLOCompositionSpec defines the desired state of SLOComposition
 type SLOCompositionSpec struct {
@@ -51,7 +67,7 @@ type SLOCompositionSpec struct {
 	Description string `json:"description,omitempty,omitzero"`
 
 	// +required
-	Objectives []SLOObjective `json:"objectives"`
+	Objectives []SLORef `json:"objectives"`
 
 	// +required
 	Composition Composition `json:"composition"`
