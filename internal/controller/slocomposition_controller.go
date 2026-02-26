@@ -87,18 +87,18 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var slo observabilityv1alpha1.ServiceLevelObjective
 	sloList := make([]observabilityv1alpha1.ServiceLevelObjective, 0, len(sloComposition.Spec.Objectives))
 	for _, obj := range sloComposition.Spec.Objectives {
-		logger.Info("Processing objective", "name", obj.Name, "namespace", obj.Namespace)
-		if obj.Namespace == "" {
+		logger.Info("Processing objective", "name", obj.Name, "namespace", obj.Ref.Namespace)
+		if obj.Ref.Namespace == "" {
 			logger.Info("Objective namespace not specified, using SLOComposition namespace", "namespace", sloComposition.Namespace)
-			obj.Namespace = sloComposition.Namespace
+			obj.Ref.Namespace = sloComposition.Namespace
 		}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: obj.Namespace, Name: obj.Name}, &slo); err != nil {
-			logger.Error(err, "unable to fetch SLO", "name", obj.Name, "namespace", obj.Namespace)
+		if err := r.Get(ctx, client.ObjectKey{Namespace: obj.Ref.Namespace, Name: obj.Ref.Name}, &slo); err != nil {
+			logger.Error(err, "unable to fetch SLO", "name", obj.Ref.Name, "namespace", obj.Ref.Namespace)
 			meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{
 				Type:    "ObjectiveFetchFailed",
 				Status:  metav1.ConditionFalse,
 				Reason:  "ObjectiveNotFound",
-				Message: "Failed to fetch objective " + obj.Name + " in namespace " + obj.Namespace,
+				Message: "Failed to fetch objective " + obj.Name + " in namespace " + obj.Ref.Namespace,
 			})
 			if err := r.Status().Update(ctx, &sloComposition); err != nil {
 				logger.Error(err, "Failed to update SLOComposition status")
@@ -107,7 +107,7 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		sloList = append(sloList, slo)
-		logger.Info("Successfully fetched SLO", "name", obj.Name, "namespace", obj.Namespace)
+		logger.Info("Successfully fetched SLO", "name", obj.Name, "namespace", obj.Ref.Namespace)
 	}
 
 	desiredRule, err := prometheus.CreateAggregatedPrometheusRule(sloComposition.Name, sloComposition.Namespace, sloComposition.Spec, sloList)

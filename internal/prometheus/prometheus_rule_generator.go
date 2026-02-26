@@ -206,6 +206,135 @@ func CreateAggregatedPrometheusRule(sloCompositionName, sloCompositionNamespace 
 		}
 
 		return prometheusRule, nil
+	case "WEIGHTED_ROUTES":
+		prometheusRule := monitoringv1.PrometheusRule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("slok-%s-%s-aggregated", sloCompositionName, sloCompositionNamespace),
+				Namespace: sloCompositionNamespace,
+				Labels: map[string]string{
+					"release":                 "prometheus",
+					"slok.io/slo_composition": sloCompositionName,
+				},
+			},
+			Spec: monitoringv1.PrometheusRuleSpec{
+				Groups: []monitoringv1.RuleGroup{
+					{
+						Name: fmt.Sprintf("slok-%s-aggregated", sloCompositionName),
+					},
+				},
+			},
+		}
+
+		rules := &prometheusRule.Spec.Groups[0].Rules
+
+		// Build mapping: component alias → (sloName, sloNamespace, objectiveName).
+		// The controller appends slos in the same order as spec.Objectives.
+		type sloInfo struct {
+			name      string
+			namespace string
+			objective string
+		}
+		aliasToSLO := make(map[string]sloInfo, len(spec.Objectives))
+		for i, obj := range spec.Objectives {
+			if i < len(slos) {
+				aliasToSLO[obj.Name] = sloInfo{
+					name:      slos[i].Name,
+					namespace: slos[i].Namespace,
+					objective: slos[i].Spec.Objective.Name,
+				}
+			}
+		}
+
+		routes := spec.Composition.Params.Routes
+
+		// SLI error composition rate recording rules (one per window).
+		//
+		// Formula (sequential chain = product of success rates):
+		//   e_total = 1 - sum_i( weight_i * prod_j(1 - e_j) )
+		//
+		// PromQL equivalent per window:
+		//   1 - (
+		//     route1.weight * ((1-scalar(e_a)) * (1-scalar(e_b)))
+		//     + route2.weight * ((1-scalar(e_a)) * (1-scalar(e_c)))
+		//     + ...
+		//   )
+		for _, window := range recordingWindows {
+			routeExprs := make([]string, 0, len(routes))
+			for _, route := range routes {
+				chainParts := make([]string, 0, len(route.Chain))
+				for _, alias := range route.Chain {
+					info, ok := aliasToSLO[alias]
+					if !ok {
+						return monitoringv1.PrometheusRule{}, fmt.Errorf("component alias %q not found in objectives", alias)
+					}
+					chainParts = append(chainParts, fmt.Sprintf(
+						`(1 - scalar(slok:sli_error_rate:%s{slo_name="%s",slo_namespace="%s",objective_name="%s"}))`,
+						window, info.name, info.namespace, info.objective,
+					))
+				}
+				routeExprs = append(routeExprs, fmt.Sprintf(
+					"%g * (%s)",
+					route.Weight, strings.Join(chainParts, " * "),
+				))
+			}
+			expr := fmt.Sprintf("1 - (\n  %s\n)", strings.Join(routeExprs, "\n  + "))
+			*rules = append(*rules, monitoringv1.Rule{
+				Record: fmt.Sprintf("slok:sli_error_composition_rate:%s", window),
+				Expr:   intstr.FromString(expr),
+				Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, window),
+			})
+		}
+
+		// Objective target constant
+		*rules = append(*rules, monitoringv1.Rule{
+			Record: "slok:objective_target_composition",
+			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", spec.Tartget/100)),
+			Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, "30d"),
+		})
+
+		// Error budget target constant (1 - target)
+		*rules = append(*rules, monitoringv1.Rule{
+			Record: "slok:error_budget_target_composition",
+			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", 1-spec.Tartget/100)),
+			Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, "30d"),
+		})
+
+		// Burn rate recording rules (one per window)
+		for _, window := range recordingWindows {
+			*rules = append(*rules, monitoringv1.Rule{
+				Record: fmt.Sprintf("slok:burn_rate_composition:%s", window),
+				Expr:   intstr.FromString(burnRateExprComposition(sloCompositionName, sloCompositionNamespace, window)),
+				Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, window),
+			})
+		}
+
+		// Burn rate alerts (stessa struttura di AND_MIN)
+		if spec.Alerting != nil && spec.Alerting.BurnRateAlerts != nil && spec.Alerting.BurnRateAlerts.Enabled {
+			alertGroup := monitoringv1.RuleGroup{
+				Name: fmt.Sprintf("slok-%s-aggregated-burnRateAlerts", sloCompositionName),
+			}
+			for _, preset := range defaultBurnRatePresets {
+				alertGroup.Rules = append(alertGroup.Rules, monitoringv1.Rule{
+					Alert:  fmt.Sprintf("Composition: %s SLOBurnRateHigh - %s", sloCompositionName, preset.AlertSuffix),
+					Expr:   intstr.FromString(burnRateAlertExprComposition(sloCompositionName, sloCompositionNamespace, preset)),
+					Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, preset.ShortWindow),
+				})
+				alertGroup.Rules[len(alertGroup.Rules)-1].Labels["severity"] = preset.Severity
+			}
+			selector := fmt.Sprintf(`slo_composition_name="%s", slo_composition_namespace="%s"`, sloCompositionName, sloCompositionNamespace)
+			alertGroup.Rules = append(alertGroup.Rules, monitoringv1.Rule{
+				Alert: fmt.Sprintf("Composition: %s ErrorBudget Finished - Violated", sloCompositionName),
+				Expr: intstr.FromString(fmt.Sprintf(
+					"slok:sli_error_composition_rate:%s{%s} > slok:error_budget_target_composition{%s}",
+					spec.Window, selector, selector,
+				)),
+				Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, spec.Window),
+			})
+			alertGroup.Rules[len(alertGroup.Rules)-1].Labels["severity"] = "warning"
+			prometheusRule.Spec.Groups = append(prometheusRule.Spec.Groups, alertGroup)
+		}
+
+		return prometheusRule, nil
 	default:
 		return monitoringv1.PrometheusRule{}, fmt.Errorf("unsupported composition type: %s", spec.Composition.Type)
 	}

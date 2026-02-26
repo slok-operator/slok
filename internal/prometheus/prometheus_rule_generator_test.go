@@ -220,3 +220,301 @@ func TestCreateAggregatedPrometheusRule_UnsupportedType(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+// --- WEIGHTED_ROUTES helpers ---
+
+func makeSLORef(alias, sloName, namespace string) observabilityv1alpha1.SLORef {
+	return observabilityv1alpha1.SLORef{
+		Name: alias,
+		Ref:  observabilityv1alpha1.SLOObjective{Name: sloName, Namespace: namespace},
+	}
+}
+
+func makeWeightedSpec(target float64, window string, objectives []observabilityv1alpha1.SLORef, routes []observabilityv1alpha1.Route, alerting *observabilityv1alpha1.Alerting) observabilityv1alpha1.SLOCompositionSpec {
+	return observabilityv1alpha1.SLOCompositionSpec{
+		Tartget:    target,
+		Window:     window,
+		Objectives: objectives,
+		Composition: observabilityv1alpha1.Composition{
+			Type: "WEIGHTED_ROUTES",
+			Params: observabilityv1alpha1.CompositionParams{
+				Routes: routes,
+			},
+		},
+		Alerting: alerting,
+	}
+}
+
+// checkoutWeightedFixture returns the SLOs and spec for the canonical checkout example:
+//
+//	route no-coupon  (weight 0.9): base → payments
+//	route with-coupon (weight 0.1): base → coupon → payments
+func checkoutWeightedFixture(alerting *observabilityv1alpha1.Alerting) (
+	[]observabilityv1alpha1.ServiceLevelObjective,
+	observabilityv1alpha1.SLOCompositionSpec,
+) {
+	slos := []observabilityv1alpha1.ServiceLevelObjective{
+		makeSLO("checkout-base-slo", "app", "availability"),
+		makeSLO("payments-slo", "app", "availability"),
+		makeSLO("coupon-slo", "app", "availability"),
+	}
+	objectives := []observabilityv1alpha1.SLORef{
+		makeSLORef("base", "checkout-base-slo", "app"),
+		makeSLORef("payments", "payments-slo", "app"),
+		makeSLORef("coupon", "coupon-slo", "app"),
+	}
+	routes := []observabilityv1alpha1.Route{
+		{Name: "no-coupon", Weight: 0.9, Chain: []string{"base", "payments"}},
+		{Name: "with-coupon", Weight: 0.1, Chain: []string{"base", "coupon", "payments"}},
+	}
+	spec := makeWeightedSpec(99.9, "30d", objectives, routes, alerting)
+	return slos, spec
+}
+
+func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_Metadata(t *testing.T) {
+	slos, spec := checkoutWeightedFixture(nil)
+
+	rule, err := CreateAggregatedPrometheusRule("checkout-weighted", "app", spec, slos)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if rule.Name != "slok-checkout-weighted-app-aggregated" {
+		t.Errorf("name: got %q, want %q", rule.Name, "slok-checkout-weighted-app-aggregated")
+	}
+	if rule.Namespace != "app" {
+		t.Errorf("namespace: got %q, want %q", rule.Namespace, "app")
+	}
+	if rule.Labels["slok.io/slo_composition"] != "checkout-weighted" {
+		t.Errorf("label slok.io/slo_composition: got %q, want %q", rule.Labels["slok.io/slo_composition"], "checkout-weighted")
+	}
+	if rule.Labels["release"] != "prometheus" {
+		t.Errorf("label release: got %q, want prometheus", rule.Labels["release"])
+	}
+}
+
+func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_RuleCount(t *testing.T) {
+	slos, spec := checkoutWeightedFixture(nil)
+
+	rule, err := CreateAggregatedPrometheusRule("checkout-weighted", "app", spec, slos)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(rule.Spec.Groups) != 1 {
+		t.Fatalf("groups: got %d, want 1", len(rule.Spec.Groups))
+	}
+	if rule.Spec.Groups[0].Name != "slok-checkout-weighted-aggregated" {
+		t.Errorf("group name: got %q, want %q", rule.Spec.Groups[0].Name, "slok-checkout-weighted-aggregated")
+	}
+
+	// len(recordingWindows) sli_error_composition_rate
+	// + 1 objective_target + 1 error_budget_target
+	// + len(recordingWindows) burn_rate
+	expected := len(recordingWindows)*2 + 2
+	got := len(rule.Spec.Groups[0].Rules)
+	if got != expected {
+		t.Fatalf("rules count: got %d, want %d", got, expected)
+	}
+}
+
+func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_ExprFormula(t *testing.T) {
+	slos, spec := checkoutWeightedFixture(nil)
+
+	rule, err := CreateAggregatedPrometheusRule("checkout-weighted", "app", spec, slos)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rules := rule.Spec.Groups[0].Rules
+
+	for i, window := range recordingWindows {
+		r := rules[i]
+
+		if r.Record != "slok:sli_error_composition_rate:"+window {
+			t.Errorf("rule[%d] record: got %q, want slok:sli_error_composition_rate:%s", i, r.Record, window)
+		}
+
+		expr := r.Expr.String()
+
+		// Top-level structure: 1 - (...)
+		if !strings.HasPrefix(expr, "1 - (") {
+			t.Errorf("rule[%d] expr should start with '1 - (': %s", i, expr)
+		}
+
+		// Both route weights present
+		if !strings.Contains(expr, "0.9 *") {
+			t.Errorf("rule[%d] expr missing weight 0.9: %s", i, expr)
+		}
+		if !strings.Contains(expr, "0.1 *") {
+			t.Errorf("rule[%d] expr missing weight 0.1: %s", i, expr)
+		}
+
+		// Success-rate form (1 - scalar(...))
+		if !strings.Contains(expr, "(1 - scalar(") {
+			t.Errorf("rule[%d] expr missing '(1 - scalar(': %s", i, expr)
+		}
+
+		// All three SLOs referenced with correct window
+		for _, sloName := range []string{"checkout-base-slo", "payments-slo", "coupon-slo"} {
+			want := `slo_name="` + sloName + `"`
+			if !strings.Contains(expr, want) {
+				t.Errorf("rule[%d] expr missing %q: %s", i, want, expr)
+			}
+		}
+		if !strings.Contains(expr, "slok:sli_error_rate:"+window) {
+			t.Errorf("rule[%d] expr missing window %q: %s", i, window, expr)
+		}
+	}
+}
+
+func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_Labels(t *testing.T) {
+	slos, spec := checkoutWeightedFixture(nil)
+
+	rule, err := CreateAggregatedPrometheusRule("checkout-weighted", "app", spec, slos)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rules := rule.Spec.Groups[0].Rules
+
+	for i, window := range recordingWindows {
+		r := rules[i]
+		if r.Labels["slo_composition_name"] != "checkout-weighted" {
+			t.Errorf("rule[%d] slo_composition_name: got %q, want checkout-weighted", i, r.Labels["slo_composition_name"])
+		}
+		if r.Labels["slo_composition_namespace"] != "app" {
+			t.Errorf("rule[%d] slo_composition_namespace: got %q, want app", i, r.Labels["slo_composition_namespace"])
+		}
+		if r.Labels["slok_window"] != window {
+			t.Errorf("rule[%d] slok_window: got %q, want %q", i, r.Labels["slok_window"], window)
+		}
+	}
+
+	// objective_target and error_budget_target use "30d" as window label
+	objTarget := rules[len(recordingWindows)]
+	if objTarget.Record != "slok:objective_target_composition" {
+		t.Errorf("objective_target record: got %q", objTarget.Record)
+	}
+	budgetTarget := rules[len(recordingWindows)+1]
+	if budgetTarget.Record != "slok:error_budget_target_composition" {
+		t.Errorf("error_budget_target record: got %q", budgetTarget.Record)
+	}
+}
+
+func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_BurnRateRules(t *testing.T) {
+	slos, spec := checkoutWeightedFixture(nil)
+
+	rule, err := CreateAggregatedPrometheusRule("checkout-weighted", "app", spec, slos)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rules := rule.Spec.Groups[0].Rules
+	burnRateOffset := len(recordingWindows) + 2
+
+	for i, window := range recordingWindows {
+		r := rules[burnRateOffset+i]
+		expected := "slok:burn_rate_composition:" + window
+		if r.Record != expected {
+			t.Errorf("burn_rate[%d] record: got %q, want %q", i, r.Record, expected)
+		}
+		if !strings.Contains(r.Expr.String(), "slok:sli_error_composition_rate:"+window) {
+			t.Errorf("burn_rate[%d] expr missing sli_error_composition_rate:%s: %s", i, window, r.Expr.String())
+		}
+	}
+}
+
+func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_WithBurnRateAlerts(t *testing.T) {
+	slos, spec := checkoutWeightedFixture(&observabilityv1alpha1.Alerting{
+		BurnRateAlerts: &observabilityv1alpha1.BurnRates{Enabled: true},
+	})
+
+	rule, err := CreateAggregatedPrometheusRule("checkout-weighted", "app", spec, slos)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(rule.Spec.Groups) != 2 {
+		t.Fatalf("groups: got %d, want 2", len(rule.Spec.Groups))
+	}
+
+	alertGroup := rule.Spec.Groups[1]
+	if alertGroup.Name != "slok-checkout-weighted-aggregated-burnRateAlerts" {
+		t.Errorf("alert group name: got %q", alertGroup.Name)
+	}
+
+	expectedAlerts := len(defaultBurnRatePresets) + 1
+	if len(alertGroup.Rules) != expectedAlerts {
+		t.Fatalf("alert rules count: got %d, want %d", len(alertGroup.Rules), expectedAlerts)
+	}
+
+	for i, preset := range defaultBurnRatePresets {
+		expr := alertGroup.Rules[i].Expr.String()
+		if !strings.Contains(expr, "slok:burn_rate_composition:"+preset.ShortWindow) {
+			t.Errorf("alert[%d] expr missing burn_rate_composition:%s: %s", i, preset.ShortWindow, expr)
+		}
+		if alertGroup.Rules[i].Labels["severity"] != preset.Severity {
+			t.Errorf("alert[%d] severity: got %q, want %q", i, alertGroup.Rules[i].Labels["severity"], preset.Severity)
+		}
+	}
+
+	// Budget exhausted alert
+	lastAlert := alertGroup.Rules[len(alertGroup.Rules)-1]
+	if !strings.Contains(lastAlert.Expr.String(), "slok:sli_error_composition_rate:30d") {
+		t.Errorf("budget alert expr missing sli_error_composition_rate:30d: %s", lastAlert.Expr.String())
+	}
+	if lastAlert.Labels["severity"] != "warning" {
+		t.Errorf("budget alert severity: got %q, want warning", lastAlert.Labels["severity"])
+	}
+}
+
+func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_SingleRoute(t *testing.T) {
+	slos := []observabilityv1alpha1.ServiceLevelObjective{
+		makeSLO("api-slo", "default", "availability"),
+	}
+	spec := makeWeightedSpec(99.9, "30d",
+		[]observabilityv1alpha1.SLORef{makeSLORef("api", "api-slo", "default")},
+		[]observabilityv1alpha1.Route{
+			{Name: "main", Weight: 1.0, Chain: []string{"api"}},
+		},
+		nil,
+	)
+
+	rule, err := CreateAggregatedPrometheusRule("single-weighted", "default", spec, slos)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expr := rule.Spec.Groups[0].Rules[0].Expr.String()
+	if !strings.HasPrefix(expr, "1 - (") {
+		t.Errorf("expr should start with '1 - (': %s", expr)
+	}
+	if !strings.Contains(expr, `slo_name="api-slo"`) {
+		t.Errorf("expr missing slo_name=api-slo: %s", expr)
+	}
+}
+
+func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_UnknownAlias(t *testing.T) {
+	slos := []observabilityv1alpha1.ServiceLevelObjective{
+		makeSLO("api-slo", "default", "availability"),
+	}
+	spec := makeWeightedSpec(99.9, "30d",
+		[]observabilityv1alpha1.SLORef{makeSLORef("api", "api-slo", "default")},
+		[]observabilityv1alpha1.Route{
+			{Name: "bad-route", Weight: 1.0, Chain: []string{"api", "ghost"}}, // "ghost" not in objectives
+		},
+		nil,
+	)
+
+	_, err := CreateAggregatedPrometheusRule("bad-composition", "default", spec, slos)
+	if err == nil {
+		t.Fatal("expected error for unknown alias, got nil")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Errorf("error should mention the unknown alias 'ghost': %v", err)
+	}
+	if !strings.Contains(err.Error(), "not found in objectives") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
