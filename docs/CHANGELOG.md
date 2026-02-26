@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+#### WEIGHTED_ROUTES composition type (alpha)
+- New `WEIGHTED_ROUTES` strategy for `SLOComposition`, modelling traffic that flows through different service chains with a given weight
+- Routes are defined as an ordered list of component aliases (`chain`) each mapped to an existing `ServiceLevelObjective` via the `objectives` field
+- The composed error rate is computed as `1 - sum_i(weight_i × prod_j(1 - e_j))`, where each chain is treated as a sequential dependency (implicit AND over success rates)
+- SLOK generates one `slok:sli_error_composition_rate:WINDOW` recording rule per evaluation window using `scalar()` to combine individual SLO error rates across different label sets
+- Burn rate recording rules and burn rate alerts are generated using the same pipeline as `AND_MIN`
+- Added annotated sample CR at `config/samples/observability_v1alpha1_slocomposition_weighted_routes.yaml`
+- Fixed kubebuilder `Enum` marker syntax (`AND_MIN;WEIGHTED_ROUTES`) so `make manifests` generates correct CRD validation
+
 #### Event Correlation
 - New `SLOCorrelation` CRD that records burn rate spikes and correlated cluster changes
   - Short name: `slocorr` for `kubectl get slocorr`

@@ -517,24 +517,78 @@ SLO Composition allows you to define a higher-level reliability target that aggr
 
 SLOK introduces a new CRD: `SLOComposition`. It references a set of existing `ServiceLevelObjective` resources and combines their error rates using a **composition strategy**. The result is a set of Prometheus recording rules and alerts that operate on the aggregated signal.
 
-Currently supported strategy:
+Currently supported strategies:
 
-| Strategy | Description |
-|----------|-------------|
-| `AND_MIN` | The composition is healthy only when **all** referenced SLOs are healthy. The error rate is taken as the `max` across all objectives (worst-case). |
+| Strategy | Description | Status |
+|----------|-------------|--------|
+| `AND_MIN` | The composition is healthy only when **all** referenced SLOs are healthy. The error rate is taken as the `max` across all objectives (worst-case). | Stable |
+| `WEIGHTED_ROUTES` | Models traffic that flows through different service chains with a given weight (e.g. 90% go through service A→B, 10% through A→C→B). The error rate is computed as a weighted combination of per-route failure probabilities. | Alpha (unstable) |
+
+### AND_MIN
+
+The simplest strategy. The composed error rate is the worst individual error rate across all referenced SLOs, effectively saying "the system is only as reliable as its weakest component."
+
+```yaml
+composition:
+  type: AND_MIN
+```
+
+### WEIGHTED_ROUTES
+
+`WEIGHTED_ROUTES` models systems where different requests follow different paths through your services. You describe each possible path (called a _route_) as an ordered list of component aliases (a _chain_), and assign a weight reflecting how much of your traffic takes that path.
+
+Each service in a chain must succeed for the request to succeed. The success rate of a chain is therefore the product of the individual success rates. The overall composed error rate is:
+
+```
+e_total = 1 - sum_i( weight_i × prod_j(1 - e_j) )
+```
+
+For example, a checkout flow where 90% of users skip the coupon service and 10% use it:
+
+```
+e_total = 1 - (
+  0.9 × (1 - e_base) × (1 - e_payments)
+  +
+  0.1 × (1 - e_base) × (1 - e_coupon) × (1 - e_payments)
+)
+```
+
+The `objectives` field maps logical aliases to actual `ServiceLevelObjective` resources. The `chain` field references those aliases in order. Weights must sum to `1.0`.
+
+```yaml
+composition:
+  type: WEIGHTED_ROUTES
+  params:
+    routes:
+      - name: no-coupon
+        weight: 0.9
+        chain:
+          - base
+          - payments
+      - name: with-coupon
+        weight: 0.1
+        chain:
+          - base
+          - coupon
+          - payments
+```
+
+SLOK translates this formula directly into Prometheus recording rules — one per evaluation window — and wires the result into the same burn rate and alerting pipeline as `AND_MIN`.
+
+> **Note:** `WEIGHTED_ROUTES` is currently in alpha. The API may change before it is marked stable.
 
 ### Generated Recording Rules
 
 For each composition SLOK generates the following recording rules:
 
-| Rule | Expression | Purpose |
-|------|-----------|---------|
-| `slok:sli_error_composition_rate:WINDOW` | `max by () (slok:sli_error_rate:WINDOW{objective_id=~"..."})` | Worst-case error rate across all SLOs |
-| `slok:objective_target_composition` | `vector(target / 100)` | Composition target constant |
-| `slok:error_budget_target_composition` | `vector(1 - target / 100)` | Allowed error fraction |
-| `slok:burn_rate_composition:WINDOW` | `slok:sli_error_composition_rate:WINDOW / slok:error_budget_target_composition` | Composition burn rate |
+| Rule | AND_MIN expression | WEIGHTED_ROUTES expression | Purpose |
+|------|--------------------|---------------------------|---------|
+| `slok:sli_error_composition_rate:WINDOW` | `max by () (slok:sli_error_rate:WINDOW{objective_id=~"..."})` | `1 - sum_i(weight_i × prod_j(1 - scalar(slok:sli_error_rate:WINDOW{...})))` | Composed error rate |
+| `slok:objective_target_composition` | `vector(target / 100)` | `vector(target / 100)` | Composition target constant |
+| `slok:error_budget_target_composition` | `vector(1 - target / 100)` | `vector(1 - target / 100)` | Allowed error fraction |
+| `slok:burn_rate_composition:WINDOW` | `slok:sli_error_composition_rate:WINDOW / slok:error_budget_target_composition` | same | Composition burn rate |
 
-### Example
+### AND_MIN example
 
 ```yaml
 apiVersion: observability.slok.io/v1alpha1
@@ -551,6 +605,10 @@ spec:
   composition:
     type: AND_MIN
 ```
+
+### WEIGHTED_ROUTES example
+
+See the full annotated example at [config/samples/observability_v1alpha1_slocomposition_weighted_routes.yaml](config/samples/observability_v1alpha1_slocomposition_weighted_routes.yaml).
 
 Apply it with:
 
@@ -631,8 +689,8 @@ When enabled, SLOK generates the same preset alerts as for single SLOs, but refe
 
 ### Limitations
 
-- Only the `AND_MIN` composition type is supported.
 - Budget error alerts (`budgetErrorAlerts`) are not yet supported for compositions; only burn rate alerts are available.
+- `WEIGHTED_ROUTES` is alpha: validation of weights (must sum to 1.0, no duplicate aliases, non-empty chains) is not yet enforced by the webhook.
 
 ---
 
