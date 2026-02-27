@@ -218,6 +218,10 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "ServiceLevelObjective")
 			os.Exit(1)
 		}
+		if err := webhookv1alpha1.SetupSLOCompositionWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "SLOComposition")
+			os.Exit(1)
+		}
 	}
 	if err := (&controller.SLOCompositionReconciler{
 		Client: mgr.GetClient(),
