@@ -271,7 +271,7 @@ func (e *CorrelationEngine) filterBySelector(
 ) []ChangeRecord {
 	// If no selector, only filter by SLO namespace
 	if selector == nil {
-		var filtered []ChangeRecord
+		filtered := make([]ChangeRecord, 0, len(changes))
 		for _, change := range changes {
 			if change.Namespace == sloNamespace {
 				filtered = append(filtered, change)
@@ -291,7 +291,7 @@ func (e *CorrelationEngine) filterBySelector(
 		allowedNamespaces[sloNamespace] = true
 	}
 
-	var filtered []ChangeRecord
+	filtered := make([]ChangeRecord, 0, len(changes))
 	for _, change := range changes {
 		// Check namespace
 		if !allowedNamespaces[change.Namespace] {

@@ -220,7 +220,7 @@ func buildLabelSelector(labels map[string]string) string {
 		return ""
 	}
 
-	var parts []string
+	parts := make([]string, 0, len(labels))
 	for k, v := range labels {
 		parts = append(parts, fmt.Sprintf(`%s="%s"`, k, v))
 	}

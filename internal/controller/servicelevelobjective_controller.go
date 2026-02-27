@@ -188,7 +188,7 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 
-	var burnRates []burnrate.BurnRate
+	burnRates := make([]burnrate.BurnRate, 0, len(defaultBurnRatePresets))
 	for _, preset := range defaultBurnRatePresets {
 		sliBurnRateShortQuery := fmt.Sprintf("slok:burn_rate:%s{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", preset.ShortWindow, obj.Name, slo.Name, slo.Namespace)
 		sliBurnRateShortLongQuery := fmt.Sprintf("slok:burn_rate:%s{objective_name=\"%s\",slo_name=\"%s\",slo_namespace=\"%s\"}", preset.LongWindow, obj.Name, slo.Name, slo.Namespace)

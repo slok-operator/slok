@@ -181,7 +181,7 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 
-	var burnRates []burnrate.BurnRate
+	burnRates := make([]burnrate.BurnRate, 0, len(defaultBurnRatePresets))
 	for _, preset := range defaultBurnRatePresets {
 		sliBurnRateShortQuery := fmt.Sprintf("slok:burn_rate_composition:%s{slo_composition_name=\"%s\",slo_composition_namespace=\"%s\"}", preset.ShortWindow, sloComposition.Name, sloComposition.Namespace)
 		sliBurnRateShortLongQuery := fmt.Sprintf("slok:burn_rate_composition:%s{slo_composition_name=\"%s\",slo_composition_namespace=\"%s\"}", preset.LongWindow, sloComposition.Name, sloComposition.Namespace)
