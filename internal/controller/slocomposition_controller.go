@@ -131,7 +131,7 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	sliErrorRate5m, err := r.PrometheusClient.QuerySLI(ctx, sliErrorRate5mQuery)
 	if err != nil {
 		logger.Error(err, "unable to query SLI error rate for 5m window", "sli_query", sliErrorRate5mQuery)
-		sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Tartget)
+		sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Target)
 		sloComposition.Status.LastUpdateTime = metav1.Now()
 		meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{
 			Type:   "Available",
@@ -150,7 +150,7 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	sliBurnRateWindowed, err := r.PrometheusClient.QuerySLI(ctx, sliBurnRateWindowedQuery)
 	if err != nil {
 		logger.Error(err, "unable to query SLI burn rate windowed", "sli_query", sliBurnRateWindowedQuery)
-		sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Tartget)
+		sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Target)
 		sloComposition.Status.LastUpdateTime = metav1.Now()
 		meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{
 			Type:   "Available",
@@ -167,7 +167,7 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	budget, sliValue, err := errorbudget.Calculate(sloComposition.Spec.Window, sliBurnRateWindowed, sliErrorRate5m)
 	if err != nil {
 		logger.Error(err, "unable to calculate error budget", "objective_name", sloComposition.Name)
-		sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Tartget)
+		sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Target)
 		sloComposition.Status.LastUpdateTime = metav1.Now()
 		meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{
 			Type:   "Available",
@@ -203,8 +203,8 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		})
 	}
 
-	status := errorbudget.DetermineStatus(sloComposition.Spec.Tartget, sliValue, budget.PercentRemaining, burnRates)
-	sloComposition.Status.ObjectiveComposition = slostatus.BuildSuccessStatus(sloComposition.Name, sloComposition.Spec.Tartget, sliValue, budget, status, slostatus.BuildBurnRateStatuses(burnRates))
+	status := errorbudget.DetermineStatus(sloComposition.Spec.Target, sliValue, budget.PercentRemaining, burnRates)
+	sloComposition.Status.ObjectiveComposition = slostatus.BuildSuccessStatus(sloComposition.Name, sloComposition.Spec.Target, sliValue, budget, status, slostatus.BuildBurnRateStatuses(burnRates))
 	sloComposition.Status.LastUpdateTime = metav1.Now()
 
 	meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{

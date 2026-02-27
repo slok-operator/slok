@@ -155,14 +155,14 @@ func CreateAggregatedPrometheusRule(sloCompositionName, sloCompositionNamespace 
 		// Objective target constant
 		*rules = append(*rules, monitoringv1.Rule{
 			Record: "slok:objective_target_composition",
-			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", spec.Tartget/100)),
+			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", spec.Target/100)),
 			Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, "30d"),
 		})
 
 		// Error budget target constant (1 - target)
 		*rules = append(*rules, monitoringv1.Rule{
 			Record: "slok:error_budget_target_composition",
-			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", 1-spec.Tartget/100)),
+			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", 1-spec.Target/100)),
 			Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, "30d"),
 		})
 
@@ -291,14 +291,14 @@ func CreateAggregatedPrometheusRule(sloCompositionName, sloCompositionNamespace 
 		// Objective target constant
 		*rules = append(*rules, monitoringv1.Rule{
 			Record: "slok:objective_target_composition",
-			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", spec.Tartget/100)),
+			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", spec.Target/100)),
 			Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, "30d"),
 		})
 
 		// Error budget target constant (1 - target)
 		*rules = append(*rules, monitoringv1.Rule{
 			Record: "slok:error_budget_target_composition",
-			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", 1-spec.Tartget/100)),
+			Expr:   intstr.FromString(fmt.Sprintf("vector(%g)", 1-spec.Target/100)),
 			Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, "30d"),
 		})
 

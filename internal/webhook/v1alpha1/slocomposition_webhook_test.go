@@ -30,7 +30,7 @@ func makeComposition(compType string, objectives []observabilityv1alpha1.SLORef,
 	return &observabilityv1alpha1.SLOComposition{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-composition", Namespace: "default"},
 		Spec: observabilityv1alpha1.SLOCompositionSpec{
-			Tartget:    99.9,
+			Target:     99.9,
 			Window:     "30d",
 			Objectives: objectives,
 			Composition: observabilityv1alpha1.Composition{

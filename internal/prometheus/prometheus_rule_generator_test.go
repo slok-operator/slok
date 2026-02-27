@@ -28,7 +28,7 @@ func makeSLO(name, namespace, objectiveName string) observabilityv1alpha1.Servic
 
 func makeCompositionSpec(compositionType string, target float64, window string, alerting *observabilityv1alpha1.Alerting) observabilityv1alpha1.SLOCompositionSpec {
 	return observabilityv1alpha1.SLOCompositionSpec{
-		Tartget:     target,
+		Target:     target,
 		Window:      window,
 		Composition: observabilityv1alpha1.Composition{Type: compositionType},
 		Alerting:    alerting,
@@ -232,7 +232,7 @@ func makeSLORef(alias, sloName, namespace string) observabilityv1alpha1.SLORef {
 
 func makeWeightedSpec(target float64, window string, objectives []observabilityv1alpha1.SLORef, routes []observabilityv1alpha1.Route, alerting *observabilityv1alpha1.Alerting) observabilityv1alpha1.SLOCompositionSpec {
 	return observabilityv1alpha1.SLOCompositionSpec{
-		Tartget:    target,
+		Target:    target,
 		Window:     window,
 		Objectives: objectives,
 		Composition: observabilityv1alpha1.Composition{

@@ -57,7 +57,7 @@ type SLOCompositionSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=200
 	// +required
-	Tartget float64 `json:"target"`
+	Target float64 `json:"target"`
 
 	// window is the time window over which the objective is measured (e.g., "30d" for 30 days).
 	// Only days are supported (e.g., "7d", "30d").
