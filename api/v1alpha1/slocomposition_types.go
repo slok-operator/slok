@@ -24,14 +24,17 @@ type Route struct {
 	Weight float64 `json:"weight"`
 	Chain []string`json:"chain"`
 }
+// +kubebuilder:validation:XValidation:rule="self.routes.map(r, r.weight).sum() >= 0.999 && self.routes.map(r, r.weight).sum() <= 1.001",message="route weights must sum to 1.0"
 type CompositionParams struct {
 	Routes []Route `json:"routes,omitempty"`
 }
+// +kubebuilder:validation:XValidation:rule="self.type == 'WEIGHTED_ROUTES' ? (has(self.params) && self.params.routes.size() > 0) : !has(self.params)",message="params with at least one route is required when type is WEIGHTED_ROUTES, and must not be set otherwise"
 type Composition struct {
 	// +required
 	// +kubebuilder:validation:Enum=AND_MIN;WEIGHTED_ROUTES
 	Type string `json:"type"`
-	Params CompositionParams `json:"params"`
+	// +optional
+	Params *CompositionParams `json:"params,omitempty"`
 }
 type SLOObjective struct {
 	// name is the name of the objective (e.g., "availability", "latency").

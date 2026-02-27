@@ -237,7 +237,7 @@ func makeWeightedSpec(target float64, window string, objectives []observabilityv
 		Objectives: objectives,
 		Composition: observabilityv1alpha1.Composition{
 			Type: "WEIGHTED_ROUTES",
-			Params: observabilityv1alpha1.CompositionParams{
+			Params: &observabilityv1alpha1.CompositionParams{
 				Routes: routes,
 			},
 		},

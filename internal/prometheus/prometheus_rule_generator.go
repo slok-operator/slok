@@ -245,6 +245,9 @@ func CreateAggregatedPrometheusRule(sloCompositionName, sloCompositionNamespace 
 			}
 		}
 
+		if spec.Composition.Params == nil {
+			return monitoringv1.PrometheusRule{}, fmt.Errorf("params is required for WEIGHTED_ROUTES composition")
+		}
 		routes := spec.Composition.Params.Routes
 
 		// SLI error composition rate recording rules (one per window).

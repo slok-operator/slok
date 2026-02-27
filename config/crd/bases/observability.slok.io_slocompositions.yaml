@@ -192,15 +192,23 @@ spec:
                           type: object
                         type: array
                     type: object
+                    x-kubernetes-validations:
+                    - message: route weights must sum to 1.0
+                      rule: self.routes.map(r, r.weight).sum() >= 0.999 && self.routes.map(r,
+                        r.weight).sum() <= 1.001
                   type:
                     enum:
                     - AND_MIN
                     - WEIGHTED_ROUTES
                     type: string
                 required:
-                - params
                 - type
                 type: object
+                x-kubernetes-validations:
+                - message: params with at least one route is required when type is
+                    WEIGHTED_ROUTES, and must not be set otherwise
+                  rule: 'self.type == ''WEIGHTED_ROUTES'' ? (has(self.params) && self.params.routes.size()
+                    > 0) : !has(self.params)'
               description:
                 description: description is an optional human-readable description
                   of the SLO.
