@@ -19,15 +19,18 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
 type Route struct {
-	Name string `json:"name"`
-	Weight float64 `json:"weight"`
-	Chain []string`json:"chain"`
+	Name   string   `json:"name"`
+	Weight float64  `json:"weight"`
+	Chain  []string `json:"chain"`
 }
+
 // +kubebuilder:validation:XValidation:rule="self.routes.map(r, r.weight).sum() >= 0.999 && self.routes.map(r, r.weight).sum() <= 1.001",message="route weights must sum to 1.0"
 type CompositionParams struct {
 	Routes []Route `json:"routes,omitempty"`
 }
+
 // +kubebuilder:validation:XValidation:rule="self.type == 'WEIGHTED_ROUTES' ? (has(self.params) && self.params.routes.size() > 0) : !has(self.params)",message="params with at least one route is required when type is WEIGHTED_ROUTES, and must not be set otherwise"
 type Composition struct {
 	// +required
@@ -48,9 +51,10 @@ type SLORef struct {
 	// name is the name of the SLO resource being referenced.
 	// +required
 	Name string `json:"name"`
-	
+
 	Ref SLOObjective `json:"ref"`
 }
+
 // SLOCompositionSpec defines the desired state of SLOComposition
 type SLOCompositionSpec struct {
 	// target is the target percentage for the objective (e.g., 99.9).
@@ -79,6 +83,7 @@ type SLOCompositionSpec struct {
 	// +optional
 	Alerting *Alerting `json:"alerting,omitempty"`
 }
+
 // SLOCompositionStatus defines the observed state of SLOComposition.
 type SLOCompositionStatus struct {
 	// objectiveComposition represents the current status of the composed objective.

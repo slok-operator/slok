@@ -41,7 +41,7 @@ import (
 // SLOCompositionReconciler reconciles a SLOComposition object
 type SLOCompositionReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme           *runtime.Scheme
 	PrometheusClient prometheus.PrometheusClient
 	PrometheusURL    string
 }

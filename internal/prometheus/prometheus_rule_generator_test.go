@@ -26,10 +26,10 @@ func makeSLO(name, namespace, objectiveName string) observabilityv1alpha1.Servic
 	}
 }
 
-func makeCompositionSpec(compositionType string, target float64, window string, alerting *observabilityv1alpha1.Alerting) observabilityv1alpha1.SLOCompositionSpec {
+func makeCompositionSpec(compositionType string, alerting *observabilityv1alpha1.Alerting) observabilityv1alpha1.SLOCompositionSpec {
 	return observabilityv1alpha1.SLOCompositionSpec{
-		Target:     target,
-		Window:      window,
+		Target:      99.9,
+		Window:      "30d",
 		Composition: observabilityv1alpha1.Composition{Type: compositionType},
 		Alerting:    alerting,
 	}
@@ -40,7 +40,7 @@ func TestCreateAggregatedPrometheusRule_AND_MIN(t *testing.T) {
 		makeSLO("payment-api", "production", "availability"),
 		makeSLO("inventory-api", "production", "availability"),
 	}
-	spec := makeCompositionSpec("AND_MIN", 99.9, "30d", nil)
+	spec := makeCompositionSpec("AND_MIN", nil)
 
 	rule, err := CreateAggregatedPrometheusRule("checkout-flow", "production", spec, slos)
 	if err != nil {
@@ -147,7 +147,7 @@ func TestCreateAggregatedPrometheusRule_WithBurnRateAlerts(t *testing.T) {
 	slos := []observabilityv1alpha1.ServiceLevelObjective{
 		makeSLO("payment-api", "production", "availability"),
 	}
-	spec := makeCompositionSpec("AND_MIN", 99.9, "30d", &observabilityv1alpha1.Alerting{
+	spec := makeCompositionSpec("AND_MIN", &observabilityv1alpha1.Alerting{
 		BurnRateAlerts: &observabilityv1alpha1.BurnRates{Enabled: true},
 	})
 
@@ -188,7 +188,7 @@ func TestCreateAggregatedPrometheusRule_WithBurnRateAlerts(t *testing.T) {
 	if !strings.Contains(lastAlert.Expr.String(), "slok:sli_error_composition_rate:30d") {
 		t.Errorf("budget alert expr missing sli_error_composition_rate:30d: %s", lastAlert.Expr.String())
 	}
-	if lastAlert.Labels["severity"] != "warning" {
+	if lastAlert.Labels["severity"] != severityWarning {
 		t.Errorf("budget alert severity: got %q, want warning", lastAlert.Labels["severity"])
 	}
 }
@@ -197,7 +197,7 @@ func TestCreateAggregatedPrometheusRule_SingleSLO(t *testing.T) {
 	slos := []observabilityv1alpha1.ServiceLevelObjective{
 		makeSLO("api-gateway", "default", "latency"),
 	}
-	spec := makeCompositionSpec("AND_MIN", 99.9, "30d", nil)
+	spec := makeCompositionSpec("AND_MIN", nil)
 
 	rule, err := CreateAggregatedPrometheusRule("single", "default", spec, slos)
 	if err != nil {
@@ -211,7 +211,7 @@ func TestCreateAggregatedPrometheusRule_SingleSLO(t *testing.T) {
 }
 
 func TestCreateAggregatedPrometheusRule_UnsupportedType(t *testing.T) {
-	spec := makeCompositionSpec("OR_MAX", 99.9, "30d", nil)
+	spec := makeCompositionSpec("OR_MAX", nil)
 	_, err := CreateAggregatedPrometheusRule("my-composition", "default", spec, nil)
 	if err == nil {
 		t.Fatal("expected error for unsupported composition type, got nil")
@@ -230,9 +230,9 @@ func makeSLORef(alias, sloName, namespace string) observabilityv1alpha1.SLORef {
 	}
 }
 
-func makeWeightedSpec(target float64, window string, objectives []observabilityv1alpha1.SLORef, routes []observabilityv1alpha1.Route, alerting *observabilityv1alpha1.Alerting) observabilityv1alpha1.SLOCompositionSpec {
+func makeWeightedSpec(window string, objectives []observabilityv1alpha1.SLORef, routes []observabilityv1alpha1.Route, alerting *observabilityv1alpha1.Alerting) observabilityv1alpha1.SLOCompositionSpec {
 	return observabilityv1alpha1.SLOCompositionSpec{
-		Target:    target,
+		Target:     99.9,
 		Window:     window,
 		Objectives: objectives,
 		Composition: observabilityv1alpha1.Composition{
@@ -267,7 +267,7 @@ func checkoutWeightedFixture(alerting *observabilityv1alpha1.Alerting) (
 		{Name: "no-coupon", Weight: 0.9, Chain: []string{"base", "payments"}},
 		{Name: "with-coupon", Weight: 0.1, Chain: []string{"base", "coupon", "payments"}},
 	}
-	spec := makeWeightedSpec(99.9, "30d", objectives, routes, alerting)
+	spec := makeWeightedSpec("30d", objectives, routes, alerting)
 	return slos, spec
 }
 
@@ -464,7 +464,7 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_WithBurnRateAlerts(t *te
 	if !strings.Contains(lastAlert.Expr.String(), "slok:sli_error_composition_rate:30d") {
 		t.Errorf("budget alert expr missing sli_error_composition_rate:30d: %s", lastAlert.Expr.String())
 	}
-	if lastAlert.Labels["severity"] != "warning" {
+	if lastAlert.Labels["severity"] != severityWarning {
 		t.Errorf("budget alert severity: got %q, want warning", lastAlert.Labels["severity"])
 	}
 }
@@ -473,7 +473,7 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_SingleRoute(t *testing.T
 	slos := []observabilityv1alpha1.ServiceLevelObjective{
 		makeSLO("api-slo", "default", "availability"),
 	}
-	spec := makeWeightedSpec(99.9, "30d",
+	spec := makeWeightedSpec("30d",
 		[]observabilityv1alpha1.SLORef{makeSLORef("api", "api-slo", "default")},
 		[]observabilityv1alpha1.Route{
 			{Name: "main", Weight: 1.0, Chain: []string{"api"}},
@@ -499,7 +499,7 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_UnknownAlias(t *testing.
 	slos := []observabilityv1alpha1.ServiceLevelObjective{
 		makeSLO("api-slo", "default", "availability"),
 	}
-	spec := makeWeightedSpec(99.9, "30d",
+	spec := makeWeightedSpec("30d",
 		[]observabilityv1alpha1.SLORef{makeSLORef("api", "api-slo", "default")},
 		[]observabilityv1alpha1.Route{
 			{Name: "bad-route", Weight: 1.0, Chain: []string{"api", "ghost"}}, // "ghost" not in objectives

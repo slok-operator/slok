@@ -31,9 +31,11 @@ type burnRatePreset struct {
 //	7d      30d    >0.5x  slow burn
 var defaultBurnRatePresets = []burnRatePreset{
 	{ShortWindow: "5m", LongWindow: "1h", BurnRate: 14, Severity: "critical", AlertSuffix: "Critical", For: "2m"},
-	{ShortWindow: "1h", LongWindow: "6h", BurnRate: 6, Severity: "warning", AlertSuffix: "Degraded", For: "15m"},
-	{ShortWindow: "6h", LongWindow: "3d", BurnRate: 1, Severity: "warning", AlertSuffix: "Warning", For: "1h"},
+	{ShortWindow: "1h", LongWindow: "6h", BurnRate: 6, Severity: severityWarning, AlertSuffix: "Degraded", For: "15m"},
+	{ShortWindow: "6h", LongWindow: "3d", BurnRate: 1, Severity: severityWarning, AlertSuffix: "Warning", For: "1h"},
 }
+
+const severityWarning = "warning"
 
 // Windows for which we generate recording rules
 var recordingWindows = []string{"5m", "1h", "6h", "3d", "7d", "30d"}
@@ -200,7 +202,7 @@ func CreateAggregatedPrometheusRule(sloCompositionName, sloCompositionNamespace 
 				)),
 				Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, spec.Window),
 			})
-			alertGroup.Rules[len(alertGroup.Rules)-1].Labels["severity"] = "warning"
+			alertGroup.Rules[len(alertGroup.Rules)-1].Labels["severity"] = severityWarning
 
 			prometheusRule.Spec.Groups = append(prometheusRule.Spec.Groups, alertGroup)
 		}
@@ -333,7 +335,7 @@ func CreateAggregatedPrometheusRule(sloCompositionName, sloCompositionNamespace 
 				)),
 				Labels: baseLabelsComposition(sloCompositionName, sloCompositionNamespace, spec.Window),
 			})
-			alertGroup.Rules[len(alertGroup.Rules)-1].Labels["severity"] = "warning"
+			alertGroup.Rules[len(alertGroup.Rules)-1].Labels["severity"] = severityWarning
 			prometheusRule.Spec.Groups = append(prometheusRule.Spec.Groups, alertGroup)
 		}
 
@@ -425,7 +427,7 @@ func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv
 					budgetSelector, budgetSelector,
 				)),
 				For:    monitoringv1.DurationPointer("3m"),
-				Labels: map[string]string{"severity": "warning"},
+				Labels: map[string]string{"severity": severityWarning},
 			},
 			monitoringv1.Rule{
 				Alert: "SLOObjectiveViolatedWarning",
@@ -434,7 +436,7 @@ func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv
 					budgetSelector,
 				)),
 				For:    monitoringv1.DurationPointer("5m"),
-				Labels: map[string]string{"severity": "warning"},
+				Labels: map[string]string{"severity": severityWarning},
 			},
 		)
 
@@ -478,7 +480,7 @@ func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv
 			)),
 			Labels: baseLabels(sloName, sloNamespace, objectiveName, objective.Window),
 		})
-		alertGroup.Rules[len(alertGroup.Rules)-1].Labels["severity"] = "warning"
+		alertGroup.Rules[len(alertGroup.Rules)-1].Labels["severity"] = severityWarning
 
 		prometheusRule.Spec.Groups = append(prometheusRule.Spec.Groups, alertGroup)
 	}
