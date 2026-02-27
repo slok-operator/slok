@@ -94,6 +94,8 @@ func (r *SLOCompositionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: obj.Ref.Namespace, Name: obj.Ref.Name}, &slo); err != nil {
 			logger.Error(err, "unable to fetch SLO", "name", obj.Ref.Name, "namespace", obj.Ref.Namespace)
+			sloComposition.Status.ObjectiveComposition = slostatus.BuildUnknownStatus(sloComposition.Name, sloComposition.Spec.Target)
+			sloComposition.Status.LastUpdateTime = metav1.Now()
 			meta.SetStatusCondition(&sloComposition.Status.Conditions, metav1.Condition{
 				Type:    "ObjectiveFetchFailed",
 				Status:  metav1.ConditionFalse,

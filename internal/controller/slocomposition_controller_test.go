@@ -51,34 +51,44 @@ var _ = Describe("SLOComposition Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: observabilityv1alpha1.SLOCompositionSpec{
+						Target: 99.9,
+						Window: "30d",
+						Objectives: []observabilityv1alpha1.SLORef{
+							{
+								Name: "test-slo",
+								Ref:  observabilityv1alpha1.SLOObjective{Name: "availability"},
+							},
+						},
+						Composition: observabilityv1alpha1.Composition{
+							Type: "AND_MIN",
+						},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
+			By("Cleanup the specific resource instance SLOComposition")
 			resource := &observabilityv1alpha1.SLOComposition{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Cleanup the specific resource instance SLOComposition")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			}
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &SLOCompositionReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:           k8sClient,
+				Scheme:           k8sClient.Scheme(),
+				PrometheusClient: NewMockPrometheusClient(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
 		})
 	})
 })
