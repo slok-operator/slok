@@ -38,7 +38,7 @@ var _ = Describe("SLOComposition Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "default",
 		}
 		slocomposition := &observabilityv1alpha1.SLOComposition{}
 
