@@ -30,4 +30,24 @@ webhooks:
     resources:
     - servicelevelobjectives
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ include "slok.webhookServiceName" . }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-observability-slok-io-v1alpha1-slocomposition
+  failurePolicy: {{ .Values.webhook.failurePolicy }}
+  name: vslocomposition-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - observability.slok.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - slocompositions
+  sideEffects: None
 {{- end }}

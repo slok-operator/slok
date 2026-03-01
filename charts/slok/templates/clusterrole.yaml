@@ -6,9 +6,29 @@ metadata:
     {{- include "slok.labels" . | nindent 4 }}
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - events
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - observability.slok.io
   resources:
   - servicelevelobjectives
+  - slocompositions
+  - slocorrelations
   verbs:
   - create
   - delete
@@ -21,47 +41,28 @@ rules:
   - observability.slok.io
   resources:
   - servicelevelobjectives/finalizers
+  - slocompositions/finalizers
   verbs:
   - update
 - apiGroups:
   - observability.slok.io
   resources:
   - servicelevelobjectives/status
+  - slocompositions/status
+  - slocorrelations/status
   verbs:
   - get
   - patch
   - update
-{{- if .Values.metrics.enabled }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: {{ include "slok.fullname" . }}-metrics-auth-role
-  labels:
-    {{- include "slok.labels" . | nindent 4 }}
-rules:
 - apiGroups:
-  - authentication.k8s.io
+  - monitoring.coreos.com
   resources:
-  - tokenreviews
+  - prometheusrules
   verbs:
   - create
-- apiGroups:
-  - authorization.k8s.io
-  resources:
-  - subjectaccessreviews
-  verbs:
-  - create
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: {{ include "slok.fullname" . }}-metrics-reader
-  labels:
-    {{- include "slok.labels" . | nindent 4 }}
-rules:
-- nonResourceURLs:
-  - /metrics
-  verbs:
+  - delete
   - get
-{{- end }}
+  - list
+  - patch
+  - update
+  - watch

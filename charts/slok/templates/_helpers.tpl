@@ -68,13 +68,6 @@ Webhook service name
 {{- end }}
 
 {{/*
-Metrics service name
-*/}}
-{{- define "slok.metricsServiceName" -}}
-{{- printf "%s-metrics-service" (include "slok.fullname" .) }}
-{{- end }}
-
-{{/*
 Certificate issuer name
 */}}
 {{- define "slok.issuerName" -}}
@@ -92,9 +85,3 @@ Webhook certificate secret name
 {{- printf "%s-webhook-server-cert" (include "slok.fullname" .) }}
 {{- end }}
 
-{{/*
-Metrics certificate secret name
-*/}}
-{{- define "slok.metricsCertSecretName" -}}
-{{- printf "%s-metrics-server-cert" (include "slok.fullname" .) }}
-{{- end }}

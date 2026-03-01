@@ -21,32 +21,15 @@ webhook:
   port: 9443
   failurePolicy: Fail
 
-metrics:
-  enabled: true
-  port: 8443
-  secure: true
-  serviceMonitor:
-    enabled: true
-    interval: 30s
-    scrapeTimeout: 10s
-
 certManager:
   enabled: true
   issuer:
     create: true
     name: ""
 
-prometheusRule:
+metrics:
   enabled: true
-  rules:
-    sloAtRisk:
-      enabled: true
-      for: 5m
-      severity: warning
-    sloViolated:
-      enabled: true
-      for: 1m
-      severity: critical
+  port: 8443
 
 prometheus:
   url: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"
