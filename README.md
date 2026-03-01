@@ -5,6 +5,30 @@
 
 SLOK is a Kubernetes operator that manages Service Level Objectives (SLOs) with automatic error budget tracking. Define your reliability targets as Kubernetes resources, and SLOK will continuously monitor them using Prometheus.
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [ServiceLevelObjective](#servicelevelobjective)
+  - [Examples](#examples)
+  - [SLI Templates](#sli-templates)
+  - [Alerting](#alerting)
+  - [Status](#status)
+- [SLO Composition](#slo-composition)
+  - [AND\_MIN](#and_min)
+  - [WEIGHTED\_ROUTES](#weighted_routes)
+  - [Generated Recording Rules](#generated-recording-rules)
+  - [Alerting](#alerting-1)
+  - [Status](#status-1)
+- [Event Correlation](#event-correlation)
+- [Reference](#reference)
+  - [Query Requirements](#query-requirements)
+  - [Error Budget Calculation](#error-budget-calculation)
+- [Limitations](#limitations)
+- [Development](#development)
+- [License](#license)
+
 ## Quick Start
 
 Get your first SLO running:
@@ -101,109 +125,13 @@ kubectl get crd slocompositions.observability.slok.io
 kubectl get crd slocorrelations.observability.slok.io
 ```
 
-## SLI Templates
+## ServiceLevelObjective
 
-SLOK provides built-in templates for common SLI patterns, eliminating the need to write raw PromQL. Templates automatically generate the correct queries with zero-traffic safety.
+`ServiceLevelObjective` (shortname: `slo`) is the core resource. It defines a single measurable reliability target for a service. SLOK continuously monitors it using Prometheus and exposes the current SLI, error budget, and burn rate as status fields.
 
-### Available Templates
+### Examples
 
-| Template | Description | Required Params |
-|----------|-------------|-----------------|
-| `http-availability` | HTTP request success rate (non-5xx) | - |
-| `http-latency` | HTTP request latency (histogram-based) | `threshold` |
-| `kubernetes-apiserver` | Kubernetes API server availability | - |
-
-### http-availability
-
-Measures the ratio of successful HTTP requests (non-5xx) to total requests using `http_requests_total`.
-
-```yaml
-apiVersion: observability.slok.io/v1alpha1
-kind: ServiceLevelObjective
-metadata:
-  name: payment-api-availability
-spec:
-  displayName: "Payment API Availability"
-  objective:
-    name: availability
-    target: 99.9
-    window: 30d
-    sli:
-      template:
-        name: http-availability
-        labels:
-          service: "payment-api"
-```
-
-Generated queries:
-- `totalQuery`: `http_requests_total{service="payment-api"}`
-- `errorQuery`: `http_requests_total{service="payment-api",status=~"5.."}`
-
-### http-latency
-
-Measures the ratio of slow requests (above threshold) to total requests using histogram buckets.
-
-```yaml
-apiVersion: observability.slok.io/v1alpha1
-kind: ServiceLevelObjective
-metadata:
-  name: checkout-latency
-spec:
-  displayName: "Checkout Latency"
-  objective:
-    name: latency-500ms
-    target: 95.0        # 95% of requests should be under 500ms
-    window: 7d
-    sli:
-      template:
-        name: http-latency
-        labels:
-          service: "checkout"
-        params:
-          threshold: "0.5"  # 500ms in seconds
-```
-
-Generated expression:
-```promql
-1 - (
-  sum(rate(http_request_duration_seconds_bucket{service="checkout",le="0.5"}[WINDOW]))
-  /
-  clamp_min(sum(rate(http_request_duration_seconds_count{service="checkout"}[WINDOW])), 1e-12)
-)
-```
-
-### kubernetes-apiserver
-
-Measures the ratio of successful Kubernetes API server requests to total requests using `apiserver_request_total`.
-
-```yaml
-apiVersion: observability.slok.io/v1alpha1
-kind: ServiceLevelObjective
-metadata:
-  name: apiserver-availability
-spec:
-  displayName: "API Server Availability"
-  objective:
-    name: availability
-    target: 99.9
-    window: 30d
-    sli:
-      template:
-        name: kubernetes-apiserver
-        labels:
-          verb: "GET"
-          resource: "pods"
-        params:
-          errorCodes: "5.."  # Optional, defaults to "5.."
-```
-
-Generated queries:
-- `totalQuery`: `apiserver_request_total{verb="GET",resource="pods"}`
-- `errorQuery`: `apiserver_request_total{verb="GET",resource="pods",code=~"5.."}`
-
-## Examples
-
-### Availability SLO (using template)
+#### Availability SLO (using template)
 
 Track the error rate of HTTP requests:
 
@@ -225,7 +153,7 @@ spec:
           service: "payment-api"
 ```
 
-### Availability SLO (manual queries)
+#### Availability SLO (manual queries)
 
 If you need custom queries, you can still use manual PromQL:
 
@@ -246,7 +174,7 @@ spec:
         errorQuery: http_requests_total{service="payment-api", status=~"5.."}
 ```
 
-### Latency SLO (using template)
+#### Latency SLO (using template)
 
 Track the percentage of requests above a latency threshold:
 
@@ -270,7 +198,237 @@ spec:
           threshold: "0.5"
 ```
 
-### Check SLO Status
+### SLI Templates
+
+SLOK provides built-in templates for common SLI patterns, eliminating the need to write raw PromQL. Templates automatically generate the correct queries with zero-traffic safety.
+
+#### Available Templates
+
+| Template | Description | Required Params |
+|----------|-------------|-----------------|
+| `http-availability` | HTTP request success rate (non-5xx) | - |
+| `http-latency` | HTTP request latency (histogram-based) | `threshold` |
+| `kubernetes-apiserver` | Kubernetes API server availability | - |
+
+#### http-availability
+
+Measures the ratio of successful HTTP requests (non-5xx) to total requests using `http_requests_total`.
+
+```yaml
+sli:
+  template:
+    name: http-availability
+    labels:
+      service: "payment-api"
+```
+
+Generated queries:
+- `totalQuery`: `http_requests_total{service="payment-api"}`
+- `errorQuery`: `http_requests_total{service="payment-api",status=~"5.."}`
+
+#### http-latency
+
+Measures the ratio of slow requests (above threshold) to total requests using histogram buckets.
+
+```yaml
+sli:
+  template:
+    name: http-latency
+    labels:
+      service: "checkout"
+    params:
+      threshold: "0.5"  # 500ms in seconds
+```
+
+Generated expression:
+```promql
+1 - (
+  sum(rate(http_request_duration_seconds_bucket{service="checkout",le="0.5"}[WINDOW]))
+  /
+  clamp_min(sum(rate(http_request_duration_seconds_count{service="checkout"}[WINDOW])), 1e-12)
+)
+```
+
+#### kubernetes-apiserver
+
+Measures the ratio of successful Kubernetes API server requests to total requests using `apiserver_request_total`.
+
+```yaml
+sli:
+  template:
+    name: kubernetes-apiserver
+    labels:
+      verb: "GET"
+      resource: "pods"
+    params:
+      errorCodes: "5.."  # Optional, defaults to "5.."
+```
+
+Generated queries:
+- `totalQuery`: `apiserver_request_total{verb="GET",resource="pods"}`
+- `errorQuery`: `apiserver_request_total{verb="GET",resource="pods",code=~"5.."}`
+
+### Alerting
+
+SLOK generates `PrometheusRule` resources in the same namespace as the SLO. Each
+alert type (`budgetErrorAlerts`, `burnRateAlerts`) is independently enabled via its
+own `enabled` flag. PrometheusRules are managed idempotently (`CreateOrUpdate`) and
+owned by the SLO resource for automatic garbage collection.
+
+#### Budget Alerts
+
+Budget alerts fire when the remaining error budget drops below a given percentage.
+When `budgetErrorAlerts.enabled` is `true`, SLOK creates two default rules:
+
+- **SLOObjectiveAtRisk** (warning) -- remaining budget is between 0% and 10%.
+- **SLOObjectiveViolated** (warning) -- remaining budget is at or below 0%.
+
+You can also add custom thresholds via `budgetErrorAlerts.alerts`:
+
+```yaml
+objective:
+  name: availability
+  target: 99.9
+  window: 30d
+  sli:
+    query:
+      totalQuery: http_requests_total{service="payment-api"}
+      errorQuery: http_requests_total{service="payment-api", status=~"5.."}
+  alerting:
+    budgetErrorAlerts:
+      enabled: true
+      alerts:
+        - name: SLOBudgetWarning
+          percent: 20        # fires when remaining budget < 20%
+          severity: warning
+        - name: SLOBudgetCritical
+          percent: 5         # fires when remaining budget < 5%
+          severity: critical
+```
+
+#### Burn Rate Alerts
+
+Burn rate alerts use multi-window, multi-burn-rate detection as described in
+the [Google SRE Workbook](https://sre.google/workbook/alerting-on-slos/).
+The idea is to alert when the error budget is being consumed faster than expected,
+rather than waiting for it to run out.
+
+##### Recording Rules
+
+SLOK generates a set of Prometheus recording rules for each objective:
+
+| Rule | Expression | Purpose |
+|------|-----------|---------|
+| `slok:sli_error_rate:WINDOW` | `sum(rate(errorQuery[WINDOW])) / sum(rate(totalQuery[WINDOW]))` | Error rate over window |
+| `slok:error_budget_target` | `vector(1 - target/100)` | Allowed error fraction |
+| `slok:burn_rate:WINDOW` | `slok:sli_error_rate:WINDOW / slok:error_budget_target` | Burn rate factor |
+
+Windows: 5m, 1h, 6h, 3d, 7d, 30d. All error rate rules include zero-traffic
+safety (`clamp_min` + `OR` fallback) to avoid NaN when there is no traffic.
+
+##### Default Presets
+
+When `burnRateAlerts.enabled` is `true`, SLOK automatically creates four predefined
+alert rules based on the Google SRE Workbook approach:
+
+| Alert | Short Window | Long Window | Burn Rate | Severity | Meaning |
+|-------|-------------|-------------|-----------|----------|---------|
+| `SLOBurnRateHigh - Critical` | 5m | 1h | >14x | critical | Active outage |
+| `SLOBurnRateHigh - Degraded` | 1h | 6h | >6x | warning | High burn |
+| `SLOBurnRateHigh - Warning` | 6h | 3d | >1x | warning | Steady erosion |
+| `ErrorBudget Finished` | -- | objective window | >1x | warning | Budget exhausted |
+
+Each rule fires when **both** the long-window and short-window burn rates exceed
+the threshold. The generated expression uses recording rules:
+
+```
+slok:burn_rate:SHORT > threshold AND slok:burn_rate:LONG > threshold
+```
+
+##### Custom Burn Rate Alerts
+
+You can also define custom burn rate alerts via `burnRateAlerts.alerts`:
+
+| Field | Description |
+|-------|-------------|
+| `consumePercent` | Percentage of the total error budget that, if consumed within `consumeWindow`, should trigger an alert. |
+| `consumeWindow` | The time frame over which `consumePercent` is evaluated (e.g., `1h`). Together with `consumePercent` and the SLO window, this determines the burn rate threshold. |
+| `longWindow` | The long observation window for the burn rate subquery (e.g., `1h`). |
+| `shortWindow` | The short observation window for the burn rate subquery (e.g., `5m`). Used to confirm the long window signal is not stale. |
+
+Example configuration with two severity tiers:
+
+```yaml
+objective:
+  name: availability
+  target: 99.9
+  window: 30d
+  sli:
+    query:
+      totalQuery: http_requests_total{service="payment-api"}
+      errorQuery: http_requests_total{service="payment-api", status=~"5.."}
+  alerting:
+    burnRateAlerts:
+      enabled: true
+      alerts:
+        - name: HighBurnRate
+          consumePercent: 2       # 2% of budget consumed in 1h
+          consumeWindow: 1h
+          longWindow: 1h
+          shortWindow: 5m
+          severity: critical
+        - name: MediumBurnRate
+          consumePercent: 5       # 5% of budget consumed in 6h
+          consumeWindow: 6h
+          longWindow: 6h
+          shortWindow: 30m
+          severity: warning
+```
+
+The burn rate threshold is calculated as:
+
+```
+threshold = (consumePercent / 100) * (sloWindow / consumeWindow)
+```
+
+For example, with a 30-day window and `consumePercent: 2`, `consumeWindow: 1h`:
+
+```
+threshold = 0.02 * 720h / 1h = 14.4
+```
+
+If both the long-window and short-window burn rates exceed 14.4, the alert fires.
+
+#### Combining Budget and Burn Rate Alerts
+
+You can use both alert types together on the same objective:
+
+```yaml
+alerting:
+  budgetErrorAlerts:
+    enabled: true
+    alerts:
+      - name: BudgetLow
+        percent: 10
+        severity: warning
+  burnRateAlerts:
+    enabled: true
+    alerts:
+      - name: HighBurnRate
+        consumePercent: 2
+        consumeWindow: 1h
+        longWindow: 1h
+        shortWindow: 5m
+        severity: critical
+```
+
+Budget alerts tell you *how much* budget is left. Burn rate alerts tell you *how fast*
+it is being consumed. Using both gives you coverage for slow, sustained degradation
+(caught by budget alerts) and sudden spikes (caught by burn rate alerts).
+
+### Status
+
+#### Check Status
 
 ```bash
 # Quick overview with printer columns
@@ -327,7 +485,7 @@ status:
       reason: Reconciled
 ```
 
-### Status Values
+#### Status Values
 
 The objective status is determined by burn rate thresholds (Google SRE Workbook):
 
@@ -340,7 +498,7 @@ The objective status is determined by burn rate thresholds (Google SRE Workbook)
 | `met` | All burn rates below thresholds |
 | `unknown` | Unable to query Prometheus |
 
-### Dashboard
+#### Dashboard
 
 SLOK exports Prometheus metrics that can be visualized in Grafana:
 
@@ -351,163 +509,7 @@ The dashboard shows:
 - **Objective details**: Target, error budget remaining, burned budget, and burn rate
 - **Time series**: SLI availability over time and error budget consumption
 
-## Alerting
-
-SLOK generates `PrometheusRule` resources in the same namespace as the SLO. Each
-alert type (`budgetErrorAlerts`, `burnRateAlerts`) is independently enabled via its
-own `enabled` flag. PrometheusRules are managed idempotently (`CreateOrUpdate`) and
-owned by the SLO resource for automatic garbage collection.
-
-### Budget Alerts
-
-Budget alerts fire when the remaining error budget drops below a given percentage.
-When `budgetErrorAlerts.enabled` is `true`, SLOK creates two default rules:
-
-- **SLOObjectiveAtRisk** (warning) -- remaining budget is between 0% and 10%.
-- **SLOObjectiveViolated** (warning) -- remaining budget is at or below 0%.
-
-You can also add custom thresholds via `budgetErrorAlerts.alerts`:
-
-```yaml
-objective:
-  name: availability
-  target: 99.9
-  window: 30d
-  sli:
-    query:
-      totalQuery: http_requests_total{service="payment-api"}
-      errorQuery: http_requests_total{service="payment-api", status=~"5.."}
-  alerting:
-    budgetErrorAlerts:
-      enabled: true
-      alerts:
-        - name: SLOBudgetWarning
-          percent: 20        # fires when remaining budget < 20%
-          severity: warning
-        - name: SLOBudgetCritical
-          percent: 5         # fires when remaining budget < 5%
-          severity: critical
-```
-
-### Burn Rate Alerts
-
-Burn rate alerts use multi-window, multi-burn-rate detection as described in
-the [Google SRE Workbook](https://sre.google/workbook/alerting-on-slos/).
-The idea is to alert when the error budget is being consumed faster than expected,
-rather than waiting for it to run out.
-
-#### Recording Rules
-
-SLOK generates a set of Prometheus recording rules for each objective:
-
-| Rule | Expression | Purpose |
-|------|-----------|---------|
-| `slok:sli_error_rate:WINDOW` | `sum(rate(errorQuery[WINDOW])) / sum(rate(totalQuery[WINDOW]))` | Error rate over window |
-| `slok:error_budget_target` | `vector(1 - target/100)` | Allowed error fraction |
-| `slok:burn_rate:WINDOW` | `slok:sli_error_rate:WINDOW / slok:error_budget_target` | Burn rate factor |
-
-Windows: 5m, 1h, 6h, 3d, 7d, 30d. All error rate rules include zero-traffic
-safety (`clamp_min` + `OR` fallback) to avoid NaN when there is no traffic.
-
-#### Default Presets
-
-When `burnRateAlerts.enabled` is `true`, SLOK automatically creates four predefined
-alert rules based on the Google SRE Workbook approach:
-
-| Alert | Short Window | Long Window | Burn Rate | Severity | Meaning |
-|-------|-------------|-------------|-----------|----------|---------|
-| `SLOBurnRateHigh - Critical` | 5m | 1h | >14x | critical | Active outage |
-| `SLOBurnRateHigh - Degraded` | 1h | 6h | >6x | warning | High burn |
-| `SLOBurnRateHigh - Warning` | 6h | 3d | >1x | warning | Steady erosion |
-| `ErrorBudget Finished` | -- | objective window | >1x | warning | Budget exhausted |
-
-Each rule fires when **both** the long-window and short-window burn rates exceed
-the threshold. The generated expression uses recording rules:
-
-```
-slok:burn_rate:SHORT > threshold AND slok:burn_rate:LONG > threshold
-```
-
-#### Custom Burn Rate Alerts
-
-You can also define custom burn rate alerts via `burnRateAlerts.alerts`:
-
-| Field | Description |
-|-------|-------------|
-| `consumePercent` | Percentage of the total error budget that, if consumed within `consumeWindow`, should trigger an alert. |
-| `consumeWindow` | The time frame over which `consumePercent` is evaluated (e.g., `1h`). Together with `consumePercent` and the SLO window, this determines the burn rate threshold. |
-| `longWindow` | The long observation window for the burn rate subquery (e.g., `1h`). |
-| `shortWindow` | The short observation window for the burn rate subquery (e.g., `5m`). Used to confirm the long window signal is not stale. |
-
-Example configuration with two severity tiers:
-
-```yaml
-objective:
-  name: availability
-  target: 99.9
-  window: 30d
-  sli:
-    query:
-      totalQuery: http_requests_total{service="payment-api"}
-      errorQuery: http_requests_total{service="payment-api", status=~"5.."}
-  alerting:
-    burnRateAlerts:
-      enabled: true
-      alerts:
-        - name: HighBurnRate
-          consumePercent: 2       # 2% of budget consumed in 1h
-          consumeWindow: 1h
-          longWindow: 1h
-          shortWindow: 5m
-          severity: critical
-        - name: MediumBurnRate
-          consumePercent: 5       # 5% of budget consumed in 6h
-          consumeWindow: 6h
-          longWindow: 6h
-          shortWindow: 30m
-          severity: warning
-```
-
-The burn rate threshold is calculated as:
-
-```
-threshold = (consumePercent / 100) * (sloWindow / consumeWindow)
-```
-
-For example, with a 30-day window and `consumePercent: 2`, `consumeWindow: 1h`:
-
-```
-threshold = 0.02 * 720h / 1h = 14.4
-```
-
-If both the long-window and short-window burn rates exceed 14.4, the alert fires.
-
-### Combining Budget and Burn Rate Alerts
-
-You can use both alert types together on the same objective:
-
-```yaml
-alerting:
-  budgetErrorAlerts:
-    enabled: true
-    alerts:
-      - name: BudgetLow
-        percent: 10
-        severity: warning
-  burnRateAlerts:
-    enabled: true
-    alerts:
-      - name: HighBurnRate
-        consumePercent: 2
-        consumeWindow: 1h
-        longWindow: 1h
-        shortWindow: 5m
-        severity: critical
-```
-
-Budget alerts tell you *how much* budget is left. Burn rate alerts tell you *how fast*
-it is being consumed. Using both gives you coverage for slow, sustained degradation
-(caught by budget alerts) and sudden spikes (caught by burn rate alerts).
+---
 
 ## SLO Composition
 
@@ -515,7 +517,7 @@ SLO Composition allows you to define a higher-level reliability target that aggr
 
 ### How It Works
 
-SLOK introduces a new CRD: `SLOComposition`. It references a set of existing `ServiceLevelObjective` resources and combines their error rates using a **composition strategy**. The result is a set of Prometheus recording rules and alerts that operate on the aggregated signal.
+SLOK introduces a new CRD: `SLOComposition` (shortname: `sloc`). It references a set of existing `ServiceLevelObjective` resources and combines their error rates using a **composition strategy**. The result is a set of Prometheus recording rules and alerts that operate on the aggregated signal.
 
 Currently supported strategies:
 
@@ -528,9 +530,26 @@ Currently supported strategies:
 
 The simplest strategy. The composed error rate is the worst individual error rate across all referenced SLOs, effectively saying "the system is only as reliable as its weakest component."
 
+Each entry in `objectives` maps a local **alias** (`name`) to an actual `ServiceLevelObjective` resource (`ref.name`). For `AND_MIN` the alias is not used in chains, but the `ref` field is still required.
+
 ```yaml
-composition:
-  type: AND_MIN
+apiVersion: observability.slok.io/v1alpha1
+kind: SLOComposition
+metadata:
+  name: example-app-slo-composition
+  namespace: default
+spec:
+  target: 99.9
+  window: 30d
+  objectives:
+    - name: example-app-slo                  # alias
+      ref:
+        name: example-app-slo                # ServiceLevelObjective resource name
+    - name: k8s-apiserver-availability-slo
+      ref:
+        name: k8s-apiserver-availability-slo
+  composition:
+    type: AND_MIN
 ```
 
 ### WEIGHTED_ROUTES
@@ -575,6 +594,8 @@ composition:
 
 SLOK translates this formula directly into Prometheus recording rules — one per evaluation window — and wires the result into the same burn rate and alerting pipeline as `AND_MIN`.
 
+See the full annotated example at [config/samples/observability_v1alpha1_slocomposition_weighted_routes.yaml](config/samples/observability_v1alpha1_slocomposition_weighted_routes.yaml).
+
 > **Note:** `WEIGHTED_ROUTES` is currently in alpha. The API may change before it is marked stable.
 
 ### Generated Recording Rules
@@ -588,35 +609,38 @@ For each composition SLOK generates the following recording rules:
 | `slok:error_budget_target_composition` | `vector(1 - target / 100)` | `vector(1 - target / 100)` | Allowed error fraction |
 | `slok:burn_rate_composition:WINDOW` | `slok:sli_error_composition_rate:WINDOW / slok:error_budget_target_composition` | same | Composition burn rate |
 
-### AND_MIN example
+### Alerting
+
+Burn rate alerts for compositions follow the same multi-window, multi-burn-rate approach as single SLOs. Enable them via the `alerting` field:
 
 ```yaml
-apiVersion: observability.slok.io/v1alpha1
-kind: SLOComposition
-metadata:
-  name: example-app-slo-composition
-  namespace: default
 spec:
   target: 99.9
   window: 30d
   objectives:
     - name: example-app-slo
+      ref:
+        name: example-app-slo
     - name: k8s-apiserver-availability-slo
+      ref:
+        name: k8s-apiserver-availability-slo
   composition:
     type: AND_MIN
+  alerting:
+    burnRateAlerts:
+      enabled: true
 ```
 
-### WEIGHTED_ROUTES example
+When enabled, SLOK generates the same preset alerts as for single SLOs, but referencing the `slok:burn_rate_composition` recording rules:
 
-See the full annotated example at [config/samples/observability_v1alpha1_slocomposition_weighted_routes.yaml](config/samples/observability_v1alpha1_slocomposition_weighted_routes.yaml).
+| Alert | Short Window | Long Window | Burn Rate | Severity |
+|-------|-------------|-------------|-----------|----------|
+| `Composition: X SLOBurnRateHigh - Critical` | 5m | 1h | >14x | critical |
+| `Composition: X SLOBurnRateHigh - Degraded` | 1h | 6h | >6x | warning |
+| `Composition: X SLOBurnRateHigh - Warning` | 6h | 3d | >1x | warning |
+| `Composition: X ErrorBudget Finished - Violated` | -- | composition window | -- | warning |
 
-Apply it with:
-
-```bash
-kubectl apply -f k8s/1-sloComp.yaml
-```
-
-### Check Composition Status
+### Status
 
 ```bash
 # Quick overview (shortName: sloc)
@@ -660,37 +684,10 @@ status:
       reason: Reconciled
 ```
 
-### Alerting
-
-Burn rate alerts for compositions follow the same multi-window, multi-burn-rate approach as single SLOs. Enable them via the `alerting` field:
-
-```yaml
-spec:
-  target: 99.9
-  window: 30d
-  objectives:
-    - name: example-app-slo
-    - name: k8s-apiserver-availability-slo
-  composition:
-    type: AND_MIN
-  alerting:
-    burnRateAlerts:
-      enabled: true
-```
-
-When enabled, SLOK generates the same preset alerts as for single SLOs, but referencing the `slok:burn_rate_composition` recording rules:
-
-| Alert | Short Window | Long Window | Burn Rate | Severity |
-|-------|-------------|-------------|-----------|----------|
-| `Composition: X SLOBurnRateHigh - Critical` | 5m | 1h | >14x | critical |
-| `Composition: X SLOBurnRateHigh - Degraded` | 1h | 6h | >6x | warning |
-| `Composition: X SLOBurnRateHigh - Warning` | 6h | 3d | >1x | warning |
-| `Composition: X ErrorBudget Finished - Violated` | -- | composition window | -- | warning |
-
 ### Limitations
 
 - Budget error alerts (`budgetErrorAlerts`) are not yet supported for compositions; only burn rate alerts are available.
-- `WEIGHTED_ROUTES` is alpha: validation of weights (must sum to 1.0, no duplicate aliases, non-empty chains) is not yet enforced by the webhook.
+- `WEIGHTED_ROUTES` is alpha: validation of duplicate route aliases is not yet enforced by the webhook. Weight sum (must equal 1.0) and non-empty routes are validated by the CRD schema.
 
 ---
 
@@ -842,16 +839,9 @@ export GROQ_API_KEY="gsk_..."
 | Secret | Type and key count (no values) | `type: Opaque, keys: 3` |
 | Event | CrashLoopBackOff, OOMKilled, FailedScheduling, etc. | `OOMKilled: Container exceeded memory limit` |
 
-## Limitations
+---
 
-### Current Version
-
-| Limitation | Description | Workaround |
-|------------|-------------|------------|
-| **Instant queries only** | Uses Prometheus instant query for status, recording rules for SLI | Recording rules handle the rate/window computation |
-| **No multi-cluster support** | One operator per cluster | Deploy SLOK in each cluster |
-| **Fixed reconciliation interval** | SLOs are re-evaluated every 1 minute | Cannot be configured per-SLO |
-| **Prometheus Operator required for alerts** | PrometheusRule generation requires the Prometheus Operator CRDs | Install the Prometheus Operator or disable alerting |
+## Reference
 
 ### Query Requirements
 
@@ -924,6 +914,17 @@ Example for a 99.9% target over 30 days:
 - Error budget: 0.1% of 30 days = 43.2 minutes
 - If error rate is 0.0013 (actual = 99.87%), consumed = 0.13% of 30 days = 56.2 minutes
 - Remaining = 0 (budget exhausted, status: **violated**)
+
+---
+
+## Limitations
+
+| Limitation | Description | Workaround |
+|------------|-------------|------------|
+| **Instant queries only** | Uses Prometheus instant query for status, recording rules for SLI | Recording rules handle the rate/window computation |
+| **No multi-cluster support** | One operator per cluster | Deploy SLOK in each cluster |
+| **Fixed reconciliation interval** | SLOs are re-evaluated every 1 minute | Cannot be configured per-SLO |
+| **Prometheus Operator required for alerts** | PrometheusRule generation requires the Prometheus Operator CRDs | Install the Prometheus Operator or disable alerting |
 
 ## Development
 
