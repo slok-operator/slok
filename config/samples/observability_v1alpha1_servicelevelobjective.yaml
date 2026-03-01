@@ -4,6 +4,15 @@ metadata:
   labels:
     app.kubernetes.io/name: slok
     app.kubernetes.io/managed-by: kustomize
-  name: servicelevelobjective-sample
+  name: example-app-availability
 spec:
-  # TODO(user): Add fields here
+  displayName: "Example App Availability"
+  objective:
+    name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      template:
+        name: http-availability
+        labels:
+          service: "example-app"

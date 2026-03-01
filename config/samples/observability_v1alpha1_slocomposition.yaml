@@ -4,6 +4,16 @@ metadata:
   labels:
     app.kubernetes.io/name: slok
     app.kubernetes.io/managed-by: kustomize
-  name: slocomposition-sample
+  name: example-app-slo-composition
 spec:
-  # TODO(user): Add fields here
+  target: 99.9
+  window: 30d
+  objectives:
+    - name: example-app-availability    # alias
+      ref:
+        name: example-app-availability  # ServiceLevelObjective resource name
+    - name: example-app-latency         # alias
+      ref:
+        name: example-app-latency       # ServiceLevelObjective resource name
+  composition:
+    type: AND_MIN
