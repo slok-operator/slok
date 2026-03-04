@@ -7,7 +7,7 @@ import (
 )
 
 type CacheEntry struct {
-	value    float64
+	value     float64
 	fetchTime time.Time
 }
 
@@ -43,7 +43,7 @@ func (c *CachedClient) setCache(query string, value float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cache[query] = CacheEntry{
-		value:    value,
+		value:     value,
 		fetchTime: time.Now(),
 	}
 }

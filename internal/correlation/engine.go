@@ -402,11 +402,10 @@ func (e *CorrelationEngine) queryLLM(
 func formatChanges(changes []ChangeRecord) string {
 	var sb strings.Builder
 	for _, c := range changes {
-		sb.WriteString(fmt.Sprintf("- [%s] %s %s/%s (%s) by %s: %s\n",
+		fmt.Fprintf(&sb, "- [%s] %s %s/%s (%s) by %s: %s\n",
 			c.Timestamp.Format(time.RFC3339),
 			c.ChangeType, c.Namespace, c.Name,
-			c.Kind, c.Actor, c.Diff,
-		))
+			c.Kind, c.Actor, c.Diff)
 	}
 	return sb.String()
 }
