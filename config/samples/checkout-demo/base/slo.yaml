@@ -1,0 +1,26 @@
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: base-slo
+  namespace: checkout
+spec:
+  displayName: "Checkout Base"
+  objective:
+    name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      template:
+        name: http-availability
+        labels:
+          job: base-svc
+    alerting:
+      burnRateAlerts:
+        enabled: true
+      budgetErrorAlerts:
+        enabled: true
+  workloadSelector:
+    labelSelector:
+      app: base-svc
+    namespaces:
+      - checkout

@@ -1,0 +1,26 @@
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: payments-slo
+  namespace: checkout
+spec:
+  displayName: "Payments"
+  objective:
+    name: availability
+    target: 99.95
+    window: 30d
+    sli:
+      template:
+        name: http-availability
+        labels:
+          job: payments-svc
+    alerting:
+      burnRateAlerts:
+        enabled: true
+      budgetErrorAlerts:
+        enabled: true
+  workloadSelector:
+    labelSelector:
+      app: payments-svc
+    namespaces:
+      - checkout

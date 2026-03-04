@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: base-svc
+  namespace: checkout
+  labels:
+    app: base-svc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: base-svc
+  template:
+    metadata:
+      labels:
+        app: base-svc
+    spec:
+      containers:
+        - name: app
+          image: stefanprodan/podinfo:6.5.3
+          ports:
+            - name: http
+              containerPort: 9898
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: base-svc
+  namespace: checkout
+  labels:
+    app: base-svc
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9898
+      targetPort: http
+  selector:
+    app: base-svc
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: base-svc
+  namespace: checkout
+  labels:
+    app: base-svc
+spec:
+  jobLabel: app
+  selector:
+    matchLabels:
+      app: base-svc
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
