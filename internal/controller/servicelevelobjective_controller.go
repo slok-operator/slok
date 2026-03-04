@@ -45,7 +45,6 @@ type ServiceLevelObjectiveReconciler struct {
 	client.Client
 	Scheme           *runtime.Scheme
 	PrometheusClient prometheus.PrometheusClient
-	PrometheusURL    string
 	// Correlation support
 	ChangeCollector   *correlation.ChangeCollector
 	CorrelationEngine *correlation.CorrelationEngine
@@ -86,24 +85,9 @@ func (r *ServiceLevelObjectiveReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Initialize Prometheus client if not already done
-	if r.PrometheusClient == nil {
-		if r.PrometheusURL == "" {
-			promURL := "http://localhost:9090" // Default Prometheus URL
-			r.PrometheusURL = promURL
-		}
-		if promClient, err := prometheus.NewClient(r.PrometheusURL); err != nil {
-			logger.Error(err, "unable to create Prometheus client", "prometheus_url", r.PrometheusURL)
-			return ctrl.Result{}, err
-		} else {
-			r.PrometheusClient = promClient
-			logger.Info("prometheus client initialized", "prometheus_url", r.PrometheusURL)
-		}
-	}
-
 	// Check Prometheus connection
 	if err := r.PrometheusClient.CheckConnection(ctx); err != nil {
-		logger.Error(err, "unable to connect to Prometheus", "prometheus_url", r.PrometheusURL)
+		logger.Error(err, "unable to connect to Prometheus", "prometheus_url", r.PrometheusClient.GetURL())
 		return ctrl.Result{}, err
 	}
 
