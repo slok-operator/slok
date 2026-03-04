@@ -1,0 +1,46 @@
+apiVersion: observability.slok.io/v1alpha1
+kind: SLOComposition
+metadata:
+  name: checkout-composition
+  namespace: checkout
+spec:
+  target: 99.9
+  window: 30d
+
+  # objectives maps logical aliases to actual SLO resources.
+  # Aliases are used in route chains below.
+  objectives:
+    - name: base
+      ref:
+        name: base-slo
+    - name: payments
+      ref:
+        name: payments-slo
+    - name: coupons
+      ref:
+        name: coupons-slo
+
+  composition:
+    type: WEIGHTED_ROUTES
+    params:
+      routes:
+        # 90% of traffic: no coupon applied
+        # success = (1 - e_base) * (1 - e_payments)
+        - name: no-coupon
+          weight: 0.9
+          chain:
+            - base
+            - payments
+
+        # 10% of traffic: coupon service is called
+        # success = (1 - e_base) * (1 - e_coupons) * (1 - e_payments)
+        - name: with-coupon
+          weight: 0.1
+          chain:
+            - base
+            - coupons
+            - payments
+
+  alerting:
+    burnRateAlerts:
+      enabled: true

@@ -73,6 +73,10 @@ func (m *MockPrometheusClient) CheckConnection(ctx context.Context) error {
 	return m.ConnectionError
 }
 
+func (m *MockPrometheusClient) GetURL() string {
+	return "http://mock-prometheus:9090"
+}
+
 // sliErrorRateQuery builds the SLI error rate query string matching the controller format.
 //
 //nolint:unparam // sloNamespace is always "default" in tests but kept for clarity

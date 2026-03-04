@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -40,6 +41,7 @@ import (
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
 	"github.com/federicolepera/slok/internal/controller"
 	"github.com/federicolepera/slok/internal/correlation"
+	"github.com/federicolepera/slok/internal/prometheus"
 	webhookv1alpha1 "github.com/federicolepera/slok/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
@@ -200,11 +202,16 @@ func main() {
 	correlationEngine := correlation.NewCorrelationEngine(changeCollector)
 	anomalyDetector := correlation.NewAnomalyDetector()
 	setupLog.Info("Correlation engine and anomaly detector initialized")
-
+	promClient, err := prometheus.NewClient(prometheusURL)
+	if err != nil {
+		setupLog.Error(err, "unable to create Prometheus client")
+		os.Exit(1)
+	}
+	cachedPromClient := prometheus.NewCachedClient(promClient, 30*time.Second)
 	if err := (&controller.ServiceLevelObjectiveReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
-		PrometheusURL:     prometheusURL,
+		PrometheusClient:  cachedPromClient,
 		ChangeCollector:   changeCollector,
 		CorrelationEngine: correlationEngine,
 		AnomalyDetector:   anomalyDetector,

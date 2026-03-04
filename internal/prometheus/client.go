@@ -15,10 +15,12 @@ type PrometheusClient interface {
 	QuerySLI(ctx context.Context, query string) (float64, error)
 	CheckConnection(ctx context.Context) error
 	QuerySLINotNormalized(ctx context.Context, query string) (float64, error)
+	GetURL() string
 }
 
 type Client struct {
 	api promv1.API
+	url string
 }
 
 // Ensure Client implements PrometheusClient
@@ -34,7 +36,12 @@ func NewClient(prometheusURL string) (*Client, error) {
 
 	return &Client{
 		api: promv1.NewAPI(client),
+		url: prometheusURL,
 	}, nil
+}
+
+func (c *Client) GetURL() string {
+	return c.url
 }
 
 func (c *Client) QuerySLI(ctx context.Context, query string) (float64, error) {

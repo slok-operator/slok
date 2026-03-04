@@ -1,0 +1,26 @@
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: coupons-slo
+  namespace: checkout
+spec:
+  displayName: "Coupons"
+  objective:
+    name: availability
+    target: 99.5
+    window: 30d
+    sli:
+      template:
+        name: http-availability
+        labels:
+          job: coupons-svc
+    alerting:
+      burnRateAlerts:
+        enabled: true
+      budgetErrorAlerts:
+        enabled: true
+  workloadSelector:
+    labelSelector:
+      app: coupons-svc
+    namespaces:
+      - checkout
