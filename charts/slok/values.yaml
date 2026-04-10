@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: quay.io/flepera_kiratech/slok
+  repository: ghcr.io/federicolepera/slok
   pullPolicy: Always
   tag: "latest"
 
@@ -31,8 +31,20 @@ metrics:
   enabled: true
   port: 8443
 
+groq:
+  # apiKey is optional. If set, the correlation engine uses the Groq LLM to refine correlation summaries.
+  # Use either apiKey (plain text) or existingSecret (reference to a pre-existing Kubernetes Secret).
+  apiKey: ""
+  existingSecret:
+    # name of the existing Secret containing the Groq API key.
+    name: ""
+    # key inside the Secret.
+    key: "GROQ_API_KEY"
+
 prometheus:
-  url: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"
+  # url is optional. If empty, the operator uses its built-in default (http://localhost:9090).
+  # Example: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"
+  url: ""
 
 healthProbe:
   port: 8081

@@ -43,8 +43,24 @@ spec:
         - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
         {{- end }}
         env:
+        {{- if .Values.prometheus.url }}
         - name: PROMETHEUS_URL
           value: {{ .Values.prometheus.url | quote }}
+        {{- end }}
+        {{- if not .Values.webhook.enabled }}
+        - name: ENABLE_WEBHOOKS
+          value: "false"
+        {{- end }}
+        {{- if .Values.groq.apiKey }}
+        - name: GROQ_API_KEY
+          value: {{ .Values.groq.apiKey | quote }}
+        {{- else if .Values.groq.existingSecret.name }}
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.groq.existingSecret.name | quote }}
+              key: {{ .Values.groq.existingSecret.key | quote }}
+        {{- end }}
         ports:
         - containerPort: {{ .Values.healthProbe.port }}
           name: health
