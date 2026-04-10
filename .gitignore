@@ -27,3 +27,5 @@ go.work
 *~
 k8s
 .claude
+
+scripts/init.sh

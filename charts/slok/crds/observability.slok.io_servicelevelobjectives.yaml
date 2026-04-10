@@ -11,10 +11,34 @@ spec:
     kind: ServiceLevelObjective
     listKind: ServiceLevelObjectiveList
     plural: servicelevelobjectives
+    shortNames:
+    - slo
     singular: servicelevelobjective
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .status.objective.status
+      name: Status
+      type: string
+    - format: float
+      jsonPath: .status.objective.actual
+      name: Actual
+      type: number
+    - format: float
+      jsonPath: .status.objective.target
+      name: Target
+      type: number
+    - format: float
+      jsonPath: .status.objective.errorBudget.percentRemaining
+      name: Budget %
+      type: number
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ServiceLevelObjective is the Schema for the servicelevelobjectives
@@ -46,50 +70,229 @@ spec:
                 maxLength: 255
                 minLength: 1
                 type: string
-              objectives:
-                description: objectives is a list of individual objectives that make
-                  up the Service Level Objective.
-                items:
-                  properties:
-                    name:
-                      description: name is the unique name of the objective within
-                        the Service Level Objective.
-                      maxLength: 100
-                      minLength: 1
+              objective:
+                description: objectives defines the objective for this Service Level
+                  Objective.
+                properties:
+                  alerting:
+                    description: alerting configures alerting rules (budget and burn
+                      rate) for this objective.
+                    properties:
+                      budgetErrorAlerts:
+                        description: budgetErrorAlerts configures error budget threshold
+                          alerts.
+                        properties:
+                          alerts:
+                            description: |-
+                              alerts is a list of budget alerting rules.
+                              Each alert specifies a threshold percentage and severity level.
+                            items:
+                              properties:
+                                name:
+                                  description: name is the unique identifier for this
+                                    budget alert.
+                                  minLength: 1
+                                  type: string
+                                percent:
+                                  description: percent is the error budget remaining
+                                    threshold below which the alert fires (e.g., 10.0
+                                    means < 10%).
+                                  maximum: 100
+                                  minimum: 0
+                                  type: number
+                                severity:
+                                  description: severity is the alert severity level
+                                    (e.g., "critical", "warning").
+                                  enum:
+                                  - critical
+                                  - warning
+                                  - info
+                                  type: string
+                              required:
+                              - name
+                              - percent
+                              - severity
+                              type: object
+                            type: array
+                          enabled:
+                            description: enabled controls whether budget error alerts
+                              are generated.
+                            type: boolean
+                        required:
+                        - enabled
+                        type: object
+                      burnRateAlerts:
+                        description: burnRateAlerts configures burn rate alerting
+                          rules.
+                        properties:
+                          alerts:
+                            description: alerts is a list of custom burn rate alerting
+                              rules.
+                            items:
+                              properties:
+                                consumePercent:
+                                  description: |-
+                                    consumePercent is the percentage of error budget that would be consumed
+                                    within the consumeWindow at the current burn rate to trigger the alert (e.g., 2.0 means 2%).
+                                  minimum: 0
+                                  type: number
+                                consumeWindow:
+                                  description: consumeWindow is the time window used
+                                    to compute the burn rate threshold (e.g., "1h",
+                                    "6h").
+                                  pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                                  type: string
+                                longWindow:
+                                  description: longWindow is the long observation
+                                    window for the burn rate query (e.g., "1h").
+                                  pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                                  type: string
+                                name:
+                                  minLength: 1
+                                  type: string
+                                severity:
+                                  description: severity is the alert severity level
+                                    (e.g., "critical", "warning").
+                                  enum:
+                                  - critical
+                                  - warning
+                                  - info
+                                  type: string
+                                shortWindow:
+                                  description: shortWindow is the short observation
+                                    window for the burn rate query (e.g., "5m").
+                                  pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                                  type: string
+                              required:
+                              - consumePercent
+                              - consumeWindow
+                              - longWindow
+                              - name
+                              - severity
+                              - shortWindow
+                              type: object
+                            type: array
+                          enabled:
+                            description: enabled controls whether burn rate alerts
+                              are generated.
+                            type: boolean
+                        required:
+                        - enabled
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: at least one of budgetErrorAlerts or burnRateAlerts
+                        must be specified
+                      rule: has(self.budgetErrorAlerts) || has(self.burnRateAlerts)
+                  name:
+                    description: name is the unique name of the objective within the
+                      Service Level Objective.
+                    maxLength: 100
+                    minLength: 1
+                    type: string
+                  sli:
+                    description: sli defines the Service Level Indicator used to measure
+                      this objective.
+                    properties:
+                      query:
+                        description: |-
+                          query contains the manual Prometheus metric selectors.
+                          Required if template is not specified.
+                        properties:
+                          errorQuery:
+                            description: |-
+                              errorQuery is the Prometheus metric selector for error events.
+                              Example: http_requests_total{service="api",status=~"5.."}
+                            minLength: 1
+                            type: string
+                          totalQuery:
+                            description: |-
+                              totalQuery is the Prometheus metric selector for total events.
+                              Example: http_requests_total{service="api"}
+                            minLength: 1
+                            type: string
+                        required:
+                        - errorQuery
+                        - totalQuery
+                        type: object
+                      template:
+                        description: |-
+                          template specifies a predefined SLI template.
+                          When set, query must not be specified.
+                        properties:
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              labels are the Prometheus label selectors to filter metrics.
+                              Example: {"service": "payment-api", "namespace": "production"}
+                            type: object
+                          name:
+                            description: |-
+                              name is the name of the template to use for this SLI.
+                              Available templates: http-availability, http-latency, kubernetes-apiserver
+                            enum:
+                            - http-availability
+                            - http-latency
+                            - kubernetes-apiserver
+                            type: string
+                          params:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              params are template-specific parameters.
+                              For http-latency: threshold (e.g., "0.5" for 500ms)
+                            type: object
+                        required:
+                        - name
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: exactly one of query or template must be specified
+                      rule: has(self.query) != has(self.template)
+                  target:
+                    description: target is the target percentage for the objective
+                      (e.g., 99.9).
+                    maximum: 200
+                    minimum: 0
+                    type: number
+                  window:
+                    description: |-
+                      window is the time window over which the objective is measured (e.g., "30d" for 30 days).
+                      Only days are supported (e.g., "7d", "30d").
+                    pattern: ^\d+d$
+                    type: string
+                required:
+                - name
+                - sli
+                - target
+                - window
+                type: object
+              workloadSelector:
+                description: |-
+                  workloadSelector defines which cluster workloads are related to this SLO.
+                  Used by the correlation engine to filter relevant events during root cause analysis.
+                  If not specified, all events in the SLO namespace are considered.
+                properties:
+                  labelSelector:
+                    additionalProperties:
                       type: string
-                    sli:
-                      description: |-
-                        EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-                        NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-                      properties:
-                        query:
-                          type: string
-                      required:
-                      - query
-                      type: object
-                    target:
-                      description: |-
-                        targetPercentage is the target percentage for the objective (e.g., 99.9).
-                        Target as percentage (e.g. 99.9, 95.5)
-                      maximum: 200
-                      minimum: 0
-                      type: number
-                    window:
-                      description: window is the time window over which the objective
-                        is measured (e.g., "30d" for 30 days).
-                      pattern: ^(\d+d|\d+h|\d+m|\d+s)$
+                    description: |-
+                      labelSelector matches workloads by their labels.
+                      Only resources with ALL specified labels will be included in correlation.
+                      Example: {"app": "example-app", "team": "platform"}
+                    type: object
+                  namespaces:
+                    description: |-
+                      namespaces limits correlation to these namespaces.
+                      If empty, only the SLO's namespace is used.
+                    items:
                       type: string
-                  required:
-                  - name
-                  - sli
-                  - target
-                  - window
-                  type: object
-                minItems: 1
-                type: array
+                    type: array
+                type: object
             required:
             - displayName
-            - objectives
+            - objective
             type: object
           status:
             description: status defines the observed state of ServiceLevelObjective
@@ -168,63 +371,93 @@ spec:
                   updated.
                 format: date-time
                 type: string
-              objectives:
+              objective:
                 description: objectives represent the current status of each objective
                   defined in the spec.
-                items:
-                  properties:
-                    actual:
-                      description: Actual current percentage (e.g., 99.87)
-                      type: number
-                    errorBudget:
-                      description: ErrorBudget details
+                properties:
+                  actual:
+                    description: actual is the current SLI percentage (e.g., 99.87).
+                    type: number
+                  burnRate:
+                    description: burnRate contains the observed burn rate metrics.
+                    items:
+                      description: BurnRateStatus represents the observed burn rate
+                        for an objective.
                       properties:
-                        consumed:
-                          description: Consumed error budget so far (e.g., "10.5m")
-                          type: string
-                        percentRemaining:
-                          description: PercentRemaining is the percentage of budget
-                            left (e.g., 75.69)
+                        longBurnRate:
+                          description: longBurnRate is the burn rate computed over
+                            the long observation window.
                           type: number
-                        remaining:
-                          description: Remaining error budget (e.g., "32.7m")
+                        longWindow:
+                          description: longWindow is the duration of the long observation
+                            window (e.g., "1h").
                           type: string
-                        total:
-                          description: Total error budget for the window (e.g., "43.2m"
-                            for 43.2 minutes)
+                        shortBurnRate:
+                          description: shortBurnRate is the burn rate computed over
+                            the short observation window.
+                          type: number
+                        shortWindow:
+                          description: shortWindow is the duration of the short observation
+                            window (e.g., "5m").
                           type: string
                       required:
-                      - consumed
-                      - percentRemaining
-                      - remaining
-                      - total
+                      - longBurnRate
+                      - longWindow
+                      - shortBurnRate
+                      - shortWindow
                       type: object
-                    lastQueried:
-                      description: LastQueried is when we last queried Prometheus
-                      format: date-time
-                      type: string
-                    name:
-                      description: Name of the objective (matches Objective.Name)
-                      type: string
-                    status:
-                      description: Status indicates if objective is being met
-                      enum:
-                      - met
-                      - at-risk
-                      - violated
-                      - unknown
-                      type: string
-                    target:
-                      description: Target percentage (copied from spec for convenience)
-                      type: number
-                  required:
-                  - actual
-                  - errorBudget
-                  - name
-                  - status
-                  - target
-                  type: object
-                type: array
+                    type: array
+                  errorBudget:
+                    description: errorBudget contains details about error budget consumption.
+                    properties:
+                      consumed:
+                        description: Consumed error budget so far (e.g., "10.5m")
+                        type: string
+                      percentRemaining:
+                        description: PercentRemaining is the percentage of budget
+                          left (e.g., 75.69)
+                        type: number
+                      remaining:
+                        description: Remaining error budget (e.g., "32.7m")
+                        type: string
+                      total:
+                        description: Total error budget for the window (e.g., "43.2m"
+                          for 43.2 minutes)
+                        type: string
+                    required:
+                    - consumed
+                    - percentRemaining
+                    - remaining
+                    - total
+                    type: object
+                  lastQueried:
+                    description: lastQueried is the timestamp of the last Prometheus
+                      query for this objective.
+                    format: date-time
+                    type: string
+                  name:
+                    description: name of the objective (matches Objective.Name).
+                    type: string
+                  status:
+                    description: status indicates whether the objective is being met.
+                    enum:
+                    - met
+                    - warning
+                    - degraded
+                    - critical
+                    - violated
+                    - unknown
+                    type: string
+                  target:
+                    description: target percentage (copied from spec for convenience).
+                    type: number
+                required:
+                - actual
+                - errorBudget
+                - name
+                - status
+                - target
+                type: object
             type: object
         required:
         - spec

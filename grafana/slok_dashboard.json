@@ -38,7 +38,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Number of SLO objectives being monitored",
       "fieldConfig": {
@@ -98,7 +98,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Number of SLO objectives at risk",
       "fieldConfig": {
@@ -170,7 +170,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Number of SLO objectives violated",
       "fieldConfig": {
@@ -238,7 +238,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Number of SLO objectives at risk",
       "fieldConfig": {
@@ -310,7 +310,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Number of SLO objectives at risk",
       "fieldConfig": {
@@ -388,7 +388,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -450,7 +450,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -557,8 +557,6 @@
         }
       },
       "pluginVersion": "12.3.1",
-      "repeat": "slo_objective_id",
-      "repeatDirection": "h",
       "targets": [
         {
           "editorMode": "code",
@@ -570,7 +568,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "dfbml09r9gh6of"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -590,7 +588,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -664,7 +662,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -742,7 +740,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -836,7 +834,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "dfbml09r9gh6of"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -913,7 +911,6 @@
     }
   ],
   "preload": false,
-  "refresh": "30s",
   "schemaVersion": 42,
   "tags": [
     "slo",
@@ -928,29 +925,25 @@
       {
         "current": {
           "text": [
-            "example-app-slo/availability",
-            "k8s-apiserver-availability-slo/k8s-availability",
-            "example-app-slo-latency/availability"
+            "example-app-availability/availability"
           ],
           "value": [
-            "example-app-slo/availability",
-            "k8s-apiserver-availability-slo/k8s-availability",
-            "example-app-slo-latency/availability"
+            "example-app-availability/availability"
           ]
         },
-        "definition": "label_values(slok:sli_error_rate:5m,objective_id)",
+        "definition": "query_result(group by(objective_id)(slok:sli_error_rate:5m))",
         "includeAll": false,
         "label": "Objecive Id",
         "multi": true,
         "name": "slo_objective_id",
         "options": [],
         "query": {
-          "qryType": 1,
-          "query": "label_values(slok:sli_error_rate:5m,objective_id)",
+          "qryType": 3,
+          "query": "query_result(group by(objective_id)(slok:sli_error_rate:5m))",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
-        "regex": "",
+        "regex": "/.*objective_id=\"([^\"]+)\".*/",
         "type": "query"
       }
     ]
@@ -963,5 +956,23 @@
   "timezone": "browser/settings",
   "title": "SloK Dashboard",
   "uid": "ad6p4w9",
-  "version": 108
+  "version": 112,
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    }
+  ]
 }

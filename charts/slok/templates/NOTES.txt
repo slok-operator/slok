@@ -7,23 +7,7 @@ Webhook is enabled. Make sure cert-manager is installed in your cluster.
 
 {{- if .Values.metrics.enabled }}
 
-Metrics endpoint is available at:
-  Service: {{ include "slok.metricsServiceName" . }}:{{ .Values.metrics.port }}
-{{- if .Values.metrics.serviceMonitor.enabled }}
-
-ServiceMonitor is enabled - Prometheus will automatically scrape metrics.
-{{- end }}
-{{- end }}
-
-{{- if .Values.prometheusRule.enabled }}
-
-PrometheusRule is enabled with the following alerts:
-{{- if .Values.prometheusRule.rules.sloAtRisk.enabled }}
-  - SLOObjectiveAtRisk (severity: {{ .Values.prometheusRule.rules.sloAtRisk.severity }})
-{{- end }}
-{{- if .Values.prometheusRule.rules.sloViolated.enabled }}
-  - SLOObjectiveViolated (severity: {{ .Values.prometheusRule.rules.sloViolated.severity }})
-{{- end }}
+Metrics endpoint is available on port {{ .Values.metrics.port }} of the controller-manager pod.
 {{- end }}
 
 To create a ServiceLevelObjective, apply a resource like:
