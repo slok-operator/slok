@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/federicolepera/slok
+  repository: ghcr.io/slok-operator/slok
   pullPolicy: Always
   tag: "latest"
 
