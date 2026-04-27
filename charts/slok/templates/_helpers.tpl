@@ -85,3 +85,58 @@ Webhook certificate secret name
 {{- printf "%s-webhook-server-cert" (include "slok.fullname" .) }}
 {{- end }}
 
+{{/*
+Dashboard backend name.
+*/}}
+{{- define "slok.dashboardBackendName" -}}
+{{- printf "%s-dashboard-backend" (include "slok.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Dashboard frontend name.
+*/}}
+{{- define "slok.dashboardFrontendName" -}}
+{{- printf "%s-dashboard-frontend" (include "slok.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Dashboard service account name.
+*/}}
+{{- define "slok.dashboardServiceAccountName" -}}
+{{- if .Values.dashboard.serviceAccount.create }}
+{{- default (printf "%s-dashboard" (include "slok.fullname" .)) .Values.dashboard.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.dashboard.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Dashboard labels.
+*/}}
+{{- define "slok.dashboardLabels" -}}
+helm.sh/chart: {{ include "slok.chart" . }}
+app.kubernetes.io/name: {{ include "slok.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Dashboard backend selector labels.
+*/}}
+{{- define "slok.dashboardBackendSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "slok.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: dashboard-backend
+{{- end }}
+
+{{/*
+Dashboard frontend selector labels.
+*/}}
+{{- define "slok.dashboardFrontendSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "slok.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: dashboard-frontend
+{{- end }}

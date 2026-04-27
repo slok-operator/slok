@@ -1,0 +1,56 @@
+{{- if .Values.dashboard.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "slok.dashboardFrontendName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slok.dashboardLabels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard-frontend
+spec:
+  replicas: {{ .Values.dashboard.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "slok.dashboardFrontendSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "slok.dashboardFrontendSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.dashboard.securityContext | nindent 8 }}
+      containers:
+      - name: frontend
+        image: "{{ .Values.dashboard.frontend.image.repository }}:{{ .Values.dashboard.frontend.image.tag }}"
+        imagePullPolicy: {{ .Values.dashboard.frontend.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.dashboard.frontend.service.port }}
+          protocol: TCP
+        securityContext:
+          {{- toYaml .Values.dashboard.frontend.containerSecurityContext | nindent 10 }}
+        volumeMounts:
+        - name: nginx-tmp
+          mountPath: /tmp
+        resources:
+          {{- toYaml .Values.dashboard.frontend.resources | nindent 10 }}
+      volumes:
+      - name: nginx-tmp
+        emptyDir: {}
+      {{- with .Values.dashboard.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dashboard.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dashboard.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

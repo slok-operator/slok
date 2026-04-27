@@ -1,0 +1,54 @@
+{{- if and .Values.dashboard.enabled .Values.dashboard.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "slok.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slok.dashboardLabels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+  {{- with .Values.dashboard.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.dashboard.ingress.className }}
+  ingressClassName: {{ .Values.dashboard.ingress.className | quote }}
+  {{- end }}
+  {{- with .Values.dashboard.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+  {{- range .Values.dashboard.ingress.hosts }}
+  - host: {{ .host | quote }}
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "slok.dashboardBackendName" $ }}
+            port:
+              number: {{ $.Values.dashboard.backend.service.port }}
+      {{- if .paths }}
+      {{- range .paths }}
+      - path: {{ .path | quote }}
+        pathType: {{ .pathType | default "Prefix" }}
+        backend:
+          service:
+            name: {{ include "slok.dashboardFrontendName" $ }}
+            port:
+              number: {{ $.Values.dashboard.frontend.service.port }}
+      {{- end }}
+      {{- else }}
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "slok.dashboardFrontendName" $ }}
+            port:
+              number: {{ $.Values.dashboard.frontend.service.port }}
+      {{- end }}
+  {{- end }}
+{{- end }}

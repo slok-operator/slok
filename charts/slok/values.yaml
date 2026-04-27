@@ -74,3 +74,68 @@ containerSecurityContext:
   capabilities:
     drop:
       - ALL
+
+dashboard:
+  enabled: true
+  replicaCount: 1
+
+  backend:
+    image:
+      repository: ghcr.io/slok-operator/slok-dashboard-backend
+      pullPolicy: Always
+      tag: "latest"
+    service:
+      port: 8080
+    resources: {}
+    containerSecurityContext:
+      runAsUser: 65532
+      runAsGroup: 65532
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+
+  frontend:
+    image:
+      repository: ghcr.io/slok-operator/slok-dashboard-frontend
+      pullPolicy: Always
+      tag: "latest"
+    service:
+      port: 8080
+    resources: {}
+    containerSecurityContext:
+      runAsUser: 101
+      runAsGroup: 101
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+
+  serviceAccount:
+    create: true
+    name: ""
+
+  # namespace limits dashboard reads to a single namespace. Empty means all namespaces allowed by RBAC.
+  namespace: ""
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations: {}
+    hosts:
+      - host: slok-dashboard.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}

@@ -1,0 +1,37 @@
+{{- if .Values.dashboard.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "slok.dashboardBackendName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slok.dashboardLabels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard-backend
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: {{ .Values.dashboard.backend.service.port }}
+    targetPort: http
+    protocol: TCP
+  selector:
+    {{- include "slok.dashboardBackendSelectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "slok.dashboardFrontendName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slok.dashboardLabels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard-frontend
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: {{ .Values.dashboard.frontend.service.port }}
+    targetPort: http
+    protocol: TCP
+  selector:
+    {{- include "slok.dashboardFrontendSelectorLabels" . | nindent 4 }}
+{{- end }}
