@@ -120,6 +120,11 @@ dashboard:
   # namespace limits dashboard reads to a single namespace. Empty means all namespaces allowed by RBAC.
   namespace: ""
 
+  prometheus:
+    # url enables SLO trend charts in the dashboard.
+    # Example: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"
+    url: ""
+
   ingress:
     enabled: true
     className: "nginx"

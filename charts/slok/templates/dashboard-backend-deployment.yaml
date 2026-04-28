@@ -33,6 +33,11 @@ spec:
         {{- if .Values.dashboard.namespace }}
         - --namespace={{ .Values.dashboard.namespace }}
         {{- end }}
+        {{- if .Values.dashboard.prometheus.url }}
+        env:
+        - name: PROMETHEUS_URL
+          value: {{ .Values.dashboard.prometheus.url | quote }}
+        {{- end }}
         ports:
         - name: http
           containerPort: {{ .Values.dashboard.backend.service.port }}
