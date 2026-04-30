@@ -1,0 +1,19 @@
+apiVersion: observability.slok.io/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: example-app-availability
+  namespace: default
+spec:
+  displayName: "Example App - Availability"
+  objective:
+    name: availability
+    target: 99
+    window: 30d
+    sli:
+      template:
+        name: http-availability
+        labels:
+          job: example-app
+    alerting:
+      burnRateAlerts:
+        enabled: true
