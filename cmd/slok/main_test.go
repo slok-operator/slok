@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBacktestRangeDefaultsToSLOWindow(t *testing.T) {
@@ -22,8 +24,12 @@ func TestBacktestRangeDefaultsToSLOWindow(t *testing.T) {
 
 func TestBacktestCommandExposesTimeoutFlag(t *testing.T) {
 	cmd := newBacktestCmd()
-	if flag := cmd.Flags().Lookup("timeout"); flag == nil {
+	flag := cmd.Flags().Lookup("timeout")
+	if flag == nil {
 		t.Fatal("expected --timeout flag to exist")
+	}
+	if flag.DefValue != "30s" {
+		t.Fatalf("expected default timeout 30s, got %q", flag.DefValue)
 	}
 }
 
@@ -76,12 +82,32 @@ func TestParseTargetsRejectsInvalidDefaultTarget(t *testing.T) {
 }
 
 func TestResolveSLORequiresNameOrFile(t *testing.T) {
-	_, err := resolveSLO("default", "", "")
+	_, err := resolveSLO(context.Background(), "default", "", "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "provide --name") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseTimeout(t *testing.T) {
+	timeout, err := parseTimeout("45s")
+	if err != nil {
+		t.Fatalf("parseTimeout returned error: %v", err)
+	}
+	if timeout != 45*time.Second {
+		t.Fatalf("expected 45s, got %s", timeout)
+	}
+}
+
+func TestParseTimeoutRejectsInvalidValues(t *testing.T) {
+	for _, value := range []string{"", "0s", "-1s", "not-a-duration"} {
+		t.Run(value, func(t *testing.T) {
+			if _, err := parseTimeout(value); err == nil {
+				t.Fatal("expected error, got nil")
+			}
+		})
 	}
 }
 

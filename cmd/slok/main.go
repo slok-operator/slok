@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
 	"github.com/federicolepera/slok/internal/backtest"
@@ -39,6 +40,7 @@ func newBacktestCmd() *cobra.Command {
 		prometheusURL string
 		rangeStr      string
 		targetsStr    string
+		timeoutStr    string
 	)
 
 	cmd := &cobra.Command{
@@ -56,7 +58,7 @@ Read from file:
 What-if with multiple targets:
   slok backtest -f slo.yaml --targets 99,99.5,99.9,99.95`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runBacktest(namespace, name, file, prometheusURL, rangeStr, targetsStr)
+			return runBacktest(namespace, name, file, prometheusURL, rangeStr, targetsStr, timeoutStr)
 		},
 	}
 
@@ -66,14 +68,20 @@ What-if with multiple targets:
 	cmd.Flags().StringVar(&prometheusURL, "prometheus-url", "http://localhost:9090", "Prometheus base URL")
 	cmd.Flags().StringVar(&rangeStr, "range", "", "Historical range to evaluate (e.g. 30d, 7d, 24h). Defaults to the SLO objective window")
 	cmd.Flags().StringVar(&targetsStr, "targets", "", "Comma-separated target % values for what-if (e.g. 99,99.5,99.9)")
+	cmd.Flags().StringVar(&timeoutStr, "timeout", "30s", "Timeout for Kubernetes and Prometheus requests")
 
 	return cmd
 }
 
-func runBacktest(namespace, name, file, prometheusURL, rangeStr, targetsStr string) error {
-	ctx := context.Background()
+func runBacktest(namespace, name, file, prometheusURL, rangeStr, targetsStr, timeoutStr string) error {
+	timeout, err := parseTimeout(timeoutStr)
+	if err != nil {
+		return fmt.Errorf("parsing --timeout: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-	slo, err := resolveSLO(namespace, name, file)
+	slo, err := resolveSLO(ctx, namespace, name, file)
 	if err != nil {
 		return err
 	}
@@ -121,14 +129,14 @@ type resolvedSLO struct {
 }
 
 // resolveSLO returns SLO metadata from file or cluster.
-func resolveSLO(namespace, name, file string) (resolvedSLO, error) {
+func resolveSLO(ctx context.Context, namespace, name, file string) (resolvedSLO, error) {
 	if file != "" {
 		return resolveSLOFromFile(file)
 	}
 	if name == "" {
 		return resolvedSLO{}, fmt.Errorf("provide --name (cluster mode) or --file / -f (file mode)")
 	}
-	return resolveSLOFromCluster(namespace, name)
+	return resolveSLOFromCluster(ctx, namespace, name)
 }
 
 func resolveSLOFromFile(path string) (resolvedSLO, error) {
@@ -153,7 +161,7 @@ func resolveSLOFromFile(path string) (resolvedSLO, error) {
 	}, nil
 }
 
-func resolveSLOFromCluster(namespace, name string) (resolvedSLO, error) {
+func resolveSLOFromCluster(ctx context.Context, namespace, name string) (resolvedSLO, error) {
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		return resolvedSLO{}, err
@@ -172,7 +180,7 @@ func resolveSLOFromCluster(namespace, name string) (resolvedSLO, error) {
 	}
 
 	var slo observabilityv1alpha1.ServiceLevelObjective
-	if err := k8sClient.Get(context.Background(), types.NamespacedName{
+	if err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: namespace,
 		Name:      name,
 	}, &slo); err != nil {
@@ -186,6 +194,17 @@ func resolveSLOFromCluster(namespace, name string) (resolvedSLO, error) {
 		Target:        slo.Spec.Objective.Target,
 		Window:        slo.Spec.Objective.Window,
 	}, nil
+}
+
+func parseTimeout(value string) (time.Duration, error) {
+	timeout, err := time.ParseDuration(strings.TrimSpace(value))
+	if err != nil {
+		return 0, err
+	}
+	if timeout <= 0 {
+		return 0, fmt.Errorf("timeout must be greater than zero")
+	}
+	return timeout, nil
 }
 
 // parseTargets parses a comma-separated list of targets, falling back to defaultTarget.
