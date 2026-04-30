@@ -76,7 +76,7 @@ func TestParseTargetsRejectsInvalidDefaultTarget(t *testing.T) {
 }
 
 func TestResolveSLORequiresNameOrFile(t *testing.T) {
-	_, _, _, _, err := resolveSLO("default", "", "")
+	_, err := resolveSLO("default", "", "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -99,12 +99,12 @@ spec:
     window: 30d
 `)
 
-	name, namespace, objectiveName, target, err := resolveSLOFromFile(path)
+	slo, err := resolveSLOFromFile(path)
 	if err != nil {
 		t.Fatalf("resolveSLOFromFile returned error: %v", err)
 	}
-	if name != "checkout" || namespace != "payments" || objectiveName != "availability" || target != 99.9 {
-		t.Fatalf("unexpected SLO fields: name=%q namespace=%q objective=%q target=%f", name, namespace, objectiveName, target)
+	if slo.Name != "checkout" || slo.Namespace != "payments" || slo.ObjectiveName != "availability" || slo.Target != 99.9 || slo.Window != "30d" {
+		t.Fatalf("unexpected SLO fields: %#v", slo)
 	}
 }
 
@@ -121,22 +121,22 @@ spec:
     window: 30d
 `)
 
-	_, namespace, _, _, err := resolveSLOFromFile(path)
+	slo, err := resolveSLOFromFile(path)
 	if err != nil {
 		t.Fatalf("resolveSLOFromFile returned error: %v", err)
 	}
-	if namespace != "default" {
-		t.Fatalf("expected default namespace, got %q", namespace)
+	if slo.Namespace != "default" {
+		t.Fatalf("expected default namespace, got %q", slo.Namespace)
 	}
 }
 
 func TestResolveSLOFromFileReturnsReadAndParseErrors(t *testing.T) {
-	if _, _, _, _, err := resolveSLOFromFile(filepath.Join(t.TempDir(), "missing.yaml")); err == nil {
+	if _, err := resolveSLOFromFile(filepath.Join(t.TempDir(), "missing.yaml")); err == nil {
 		t.Fatal("expected read error, got nil")
 	}
 
 	path := writeTempSLO(t, `metadata: [`)
-	if _, _, _, _, err := resolveSLOFromFile(path); err == nil {
+	if _, err := resolveSLOFromFile(path); err == nil {
 		t.Fatal("expected parse error, got nil")
 	}
 }

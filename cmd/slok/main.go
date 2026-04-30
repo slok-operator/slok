@@ -64,7 +64,7 @@ What-if with multiple targets:
 	cmd.Flags().StringVar(&name, "name", "", "Name of the ServiceLevelObjective (cluster mode)")
 	cmd.Flags().StringVarP(&file, "file", "f", "", "Path to SLO YAML file (file mode)")
 	cmd.Flags().StringVar(&prometheusURL, "prometheus-url", "http://localhost:9090", "Prometheus base URL")
-	cmd.Flags().StringVar(&rangeStr, "range", "30d", "Historical range to evaluate (e.g. 30d, 7d, 24h)")
+	cmd.Flags().StringVar(&rangeStr, "range", "", "Historical range to evaluate (e.g. 30d, 7d, 24h). Defaults to the SLO objective window")
 	cmd.Flags().StringVar(&targetsStr, "targets", "", "Comma-separated target % values for what-if (e.g. 99,99.5,99.9)")
 
 	return cmd
@@ -73,12 +73,18 @@ What-if with multiple targets:
 func runBacktest(namespace, name, file, prometheusURL, rangeStr, targetsStr string) error {
 	ctx := context.Background()
 
-	sloName, sloNamespace, objectiveName, defaultTarget, err := resolveSLO(namespace, name, file)
+	slo, err := resolveSLO(namespace, name, file)
 	if err != nil {
 		return err
 	}
+	if rangeStr == "" {
+		rangeStr = slo.Window
+	}
+	if rangeStr == "" {
+		return fmt.Errorf("SLO objective window is empty; provide --range")
+	}
 
-	targets, err := parseTargets(targetsStr, defaultTarget)
+	targets, err := parseTargets(targetsStr, slo.Target)
 	if err != nil {
 		return fmt.Errorf("parsing --targets: %w", err)
 	}
@@ -92,9 +98,9 @@ func runBacktest(namespace, name, file, prometheusURL, rangeStr, targetsStr stri
 	}
 
 	result, err := backtest.New(pc).Run(ctx, backtest.Config{
-		Namespace:     sloNamespace,
-		Name:          sloName,
-		ObjectiveName: objectiveName,
+		Namespace:     slo.Namespace,
+		Name:          slo.Name,
+		ObjectiveName: slo.ObjectiveName,
 		Range:         rangeStr,
 		Targets:       targets,
 	})
@@ -106,49 +112,63 @@ func runBacktest(namespace, name, file, prometheusURL, rangeStr, targetsStr stri
 	return nil
 }
 
-// resolveSLO returns (sloName, sloNamespace, objectiveName, target) from file or cluster.
-func resolveSLO(namespace, name, file string) (string, string, string, float64, error) {
+type resolvedSLO struct {
+	Name          string
+	Namespace     string
+	ObjectiveName string
+	Target        float64
+	Window        string
+}
+
+// resolveSLO returns SLO metadata from file or cluster.
+func resolveSLO(namespace, name, file string) (resolvedSLO, error) {
 	if file != "" {
 		return resolveSLOFromFile(file)
 	}
 	if name == "" {
-		return "", "", "", 0, fmt.Errorf("provide --name (cluster mode) or --file / -f (file mode)")
+		return resolvedSLO{}, fmt.Errorf("provide --name (cluster mode) or --file / -f (file mode)")
 	}
 	return resolveSLOFromCluster(namespace, name)
 }
 
-func resolveSLOFromFile(path string) (string, string, string, float64, error) {
+func resolveSLOFromFile(path string) (resolvedSLO, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", "", "", 0, fmt.Errorf("reading %s: %w", path, err)
+		return resolvedSLO{}, fmt.Errorf("reading %s: %w", path, err)
 	}
 	var slo observabilityv1alpha1.ServiceLevelObjective
 	if err := sigsyaml.Unmarshal(data, &slo); err != nil {
-		return "", "", "", 0, fmt.Errorf("parsing SLO YAML: %w", err)
+		return resolvedSLO{}, fmt.Errorf("parsing SLO YAML: %w", err)
 	}
 	ns := slo.Namespace
 	if ns == "" {
 		ns = "default"
 	}
-	return slo.Name, ns, slo.Spec.Objective.Name, slo.Spec.Objective.Target, nil
+	return resolvedSLO{
+		Name:          slo.Name,
+		Namespace:     ns,
+		ObjectiveName: slo.Spec.Objective.Name,
+		Target:        slo.Spec.Objective.Target,
+		Window:        slo.Spec.Objective.Window,
+	}, nil
 }
 
-func resolveSLOFromCluster(namespace, name string) (string, string, string, float64, error) {
+func resolveSLOFromCluster(namespace, name string) (resolvedSLO, error) {
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return "", "", "", 0, err
+		return resolvedSLO{}, err
 	}
 	if err := observabilityv1alpha1.AddToScheme(scheme); err != nil {
-		return "", "", "", 0, err
+		return resolvedSLO{}, err
 	}
 
 	cfg, err := ctrl.GetConfig()
 	if err != nil {
-		return "", "", "", 0, fmt.Errorf("getting kubeconfig: %w", err)
+		return resolvedSLO{}, fmt.Errorf("getting kubeconfig: %w", err)
 	}
 	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
-		return "", "", "", 0, fmt.Errorf("creating k8s client: %w", err)
+		return resolvedSLO{}, fmt.Errorf("creating k8s client: %w", err)
 	}
 
 	var slo observabilityv1alpha1.ServiceLevelObjective
@@ -156,10 +176,16 @@ func resolveSLOFromCluster(namespace, name string) (string, string, string, floa
 		Namespace: namespace,
 		Name:      name,
 	}, &slo); err != nil {
-		return "", "", "", 0, fmt.Errorf("fetching SLO %s/%s: %w", namespace, name, err)
+		return resolvedSLO{}, fmt.Errorf("fetching SLO %s/%s: %w", namespace, name, err)
 	}
 
-	return slo.Name, slo.Namespace, slo.Spec.Objective.Name, slo.Spec.Objective.Target, nil
+	return resolvedSLO{
+		Name:          slo.Name,
+		Namespace:     slo.Namespace,
+		ObjectiveName: slo.Spec.Objective.Name,
+		Target:        slo.Spec.Objective.Target,
+		Window:        slo.Spec.Objective.Window,
+	}, nil
 }
 
 // parseTargets parses a comma-separated list of targets, falling back to defaultTarget.
