@@ -1,0 +1,130 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">SloK social preview</title>
+  <desc id="desc">Dark navy social preview with a central hexagonal reliability motif, connected nodes, and a time-series curve.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="120" y1="40" x2="1160" y2="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#07111E"/>
+      <stop offset="0.55" stop-color="#0A1730"/>
+      <stop offset="1" stop-color="#050A13"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(640 286) rotate(90) scale(220 430)">
+      <stop stop-color="#40D7FF" stop-opacity="0.22"/>
+      <stop offset="0.72" stop-color="#40D7FF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#40D7FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cyanGreen" x1="414" y1="178" x2="856" y2="484" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#45E0FF"/>
+      <stop offset="0.52" stop-color="#48D6C0"/>
+      <stop offset="1" stop-color="#8BFF84"/>
+    </linearGradient>
+    <linearGradient id="greenBlue" x1="470" y1="220" x2="820" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9EFF7A"/>
+      <stop offset="1" stop-color="#28D6A1"/>
+    </linearGradient>
+    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M 64 0 H 0 V 64" stroke="#8FB7FF" stroke-opacity="0.08" stroke-width="1"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000814" flood-opacity="0.58"/>
+    </filter>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0.2  0 0 1 0 0.4  0 0 0 0.7 0" result="g"/>
+      <feBlend in="SourceGraphic" in2="g" mode="screen"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)" opacity="0.95"/>
+  <ellipse cx="640" cy="282" rx="450" ry="230" fill="url(#halo)"/>
+
+  <circle cx="210" cy="170" r="96" fill="#4DE4C0" fill-opacity="0.05"/>
+  <circle cx="1074" cy="142" r="120" fill="#5B7DFF" fill-opacity="0.06"/>
+  <circle cx="1010" cy="488" r="160" fill="#49D8A8" fill-opacity="0.05"/>
+
+  <g filter="url(#shadow)">
+    <rect x="168" y="88" width="944" height="420" rx="32" fill="#08111F" fill-opacity="0.7" stroke="#8AB4FF" stroke-opacity="0.12"/>
+  </g>
+
+  <!-- Time-series / burn-rate line -->
+  <g filter="url(#glow)">
+    <path d="M216 360 C 292 338, 338 416, 410 390 C 478 364, 502 270, 586 292 C 654 310, 696 382, 766 356 C 838 329, 878 238, 956 250 C 1008 258, 1048 292, 1096 270"
+          stroke="url(#cyanGreen)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M216 360 C 292 338, 338 416, 410 390 C 478 364, 502 270, 586 292 C 654 310, 696 382, 766 356 C 838 329, 878 238, 956 250 C 1008 258, 1048 292, 1096 270"
+          stroke="#EAF9FF" stroke-opacity="0.09" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g>
+    <circle cx="216" cy="360" r="7" fill="#46E2FF"/>
+    <circle cx="410" cy="390" r="7" fill="#46E2FF"/>
+    <circle cx="586" cy="292" r="7" fill="#46E2FF"/>
+    <circle cx="766" cy="356" r="7" fill="#46E2FF"/>
+    <circle cx="956" cy="250" r="7" fill="#46E2FF"/>
+    <circle cx="1096" cy="270" r="7" fill="#46E2FF"/>
+  </g>
+
+  <!-- Connected nodes -->
+  <g stroke="#7EC9FF" stroke-opacity="0.24" stroke-width="2">
+    <path d="M375 192 L 438 228"/>
+    <path d="M905 192 L 842 228"/>
+    <path d="M318 430 L 392 392"/>
+    <path d="M962 430 L 888 392"/>
+    <path d="M640 144 L 640 186"/>
+    <path d="M640 450 L 640 494"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <!-- Outer hex -->
+    <path d="M640 166 L 764 238 L 764 382 L 640 454 L 516 382 L 516 238 Z"
+          fill="#09182D" stroke="#53D7FF" stroke-opacity="0.32" stroke-width="2.5"/>
+    <!-- Inner hex -->
+    <path d="M640 194 L 736 250 L 736 370 L 640 426 L 544 370 L 544 250 Z"
+          fill="url(#cyanGreen)" fill-opacity="0.1" stroke="#9DF9E8" stroke-opacity="0.36" stroke-width="2"/>
+    <!-- Core -->
+    <path d="M640 230 L 688 258 L 688 314 L 640 342 L 592 314 L 592 258 Z"
+          fill="#07111E" stroke="#9DF9E8" stroke-opacity="0.8" stroke-width="2"/>
+    <circle cx="640" cy="286" r="22" fill="url(#greenBlue)"/>
+    <circle cx="640" cy="286" r="8" fill="#07111E"/>
+  </g>
+
+  <!-- Metric arcs and endpoints -->
+  <g>
+    <circle cx="375" cy="192" r="13" fill="#49D8A8" fill-opacity="0.16" stroke="#49D8A8" stroke-opacity="0.58"/>
+    <circle cx="375" cy="192" r="5" fill="#49D8A8"/>
+    <circle cx="905" cy="192" r="13" fill="#49D8A8" fill-opacity="0.16" stroke="#49D8A8" stroke-opacity="0.58"/>
+    <circle cx="905" cy="192" r="5" fill="#49D8A8"/>
+    <circle cx="318" cy="430" r="13" fill="#5B7DFF" fill-opacity="0.16" stroke="#5B7DFF" stroke-opacity="0.58"/>
+    <circle cx="318" cy="430" r="5" fill="#5B7DFF"/>
+    <circle cx="962" cy="430" r="13" fill="#5B7DFF" fill-opacity="0.16" stroke="#5B7DFF" stroke-opacity="0.58"/>
+    <circle cx="962" cy="430" r="5" fill="#5B7DFF"/>
+    <circle cx="640" cy="144" r="14" fill="#46E2FF" fill-opacity="0.16" stroke="#46E2FF" stroke-opacity="0.55"/>
+    <circle cx="640" cy="494" r="14" fill="#46E2FF" fill-opacity="0.16" stroke="#46E2FF" stroke-opacity="0.55"/>
+  </g>
+
+  <!-- Side cards -->
+  <g filter="url(#shadow)">
+    <rect x="226" y="116" width="188" height="124" rx="18" fill="#091421" stroke="#C7E8FF" stroke-opacity="0.08"/>
+    <rect x="866" y="116" width="188" height="124" rx="18" fill="#091421" stroke="#C7E8FF" stroke-opacity="0.08"/>
+  </g>
+
+  <g transform="translate(244 136)">
+    <text x="0" y="0" fill="#DCEEFF" fill-opacity="0.86" font-size="16" font-weight="600" letter-spacing="0.14em" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">ERROR BUDGET</text>
+    <rect x="0" y="24" width="150" height="14" rx="7" fill="#14233B"/>
+    <rect x="0" y="24" width="106" height="14" rx="7" fill="url(#greenBlue)"/>
+    <text x="0" y="82" fill="#FFFFFF" font-size="34" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">74%</text>
+  </g>
+
+  <g transform="translate(884 136)">
+    <text x="0" y="0" fill="#DCEEFF" fill-opacity="0.86" font-size="16" font-weight="600" letter-spacing="0.14em" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">RELIABILITY</text>
+    <rect x="0" y="24" width="150" height="14" rx="7" fill="#14233B"/>
+    <rect x="0" y="24" width="136" height="14" rx="7" fill="url(#cyanGreen)"/>
+    <text x="0" y="82" fill="#FFFFFF" font-size="34" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">99.9%</text>
+  </g>
+
+  <!-- Title bottom -->
+  <g filter="url(#glow)">
+    <text x="640" y="554" text-anchor="middle" fill="#F6FBFF" font-size="74" font-weight="800" letter-spacing="0.02em" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">SloK</text>
+    <text x="640" y="588" text-anchor="middle" fill="#B7D6FF" fill-opacity="0.84" font-size="22" font-weight="500" letter-spacing="0.14em" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">KUBERNETES-NATIVE SLO OPERATOR</text>
+  </g>
+</svg>

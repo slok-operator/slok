@@ -1,0 +1,129 @@
+<svg width="1600" height="800" viewBox="0 0 1600 800" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">SloK hero illustration</title>
+  <desc id="desc">Dark themed banner with Kubernetes, SLO, and time-series motifs.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="120" y1="60" x2="1480" y2="740" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#07111F"/>
+      <stop offset="0.52" stop-color="#0B1730"/>
+      <stop offset="1" stop-color="#050A14"/>
+    </linearGradient>
+    <linearGradient id="accentCyan" x1="340" y1="170" x2="1230" y2="610" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#44E1FF"/>
+      <stop offset="0.55" stop-color="#4DD6B9"/>
+      <stop offset="1" stop-color="#5D7CFF"/>
+    </linearGradient>
+    <linearGradient id="accentGreen" x1="520" y1="180" x2="1130" y2="650" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9DFF7A"/>
+      <stop offset="1" stop-color="#2FD8A3"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(800 392) rotate(90) scale(290 520)">
+      <stop stop-color="#39D4FF" stop-opacity="0.22"/>
+      <stop offset="0.7" stop-color="#39D4FF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#39D4FF" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="56" height="56" patternUnits="userSpaceOnUse">
+      <path d="M 56 0 H 0 V 56" stroke="#8AB4FF" stroke-opacity="0.08" stroke-width="1"/>
+    </pattern>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000814" flood-opacity="0.5"/>
+    </filter>
+    <filter id="innerGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0.2  0 0 1 0 0.4  0 0 0 0.65 0" result="glow"/>
+      <feBlend in="SourceGraphic" in2="glow" mode="screen"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="800" fill="url(#bg)"/>
+  <rect width="1600" height="800" fill="url(#grid)" opacity="0.9"/>
+  <ellipse cx="800" cy="390" rx="560" ry="280" fill="url(#glow)"/>
+
+  <circle cx="1180" cy="175" r="120" fill="#4DD6B9" fill-opacity="0.05"/>
+  <circle cx="430" cy="635" r="150" fill="#5D7CFF" fill-opacity="0.06"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="250" y="152" width="1100" height="496" rx="34" fill="#09111F" fill-opacity="0.72" stroke="#87B7FF" stroke-opacity="0.14"/>
+  </g>
+
+  <g opacity="0.95">
+    <path d="M360 510 C 470 458, 550 582, 666 524 C 764 475, 818 315, 922 334 C 1007 350, 1060 470, 1168 428 C 1214 410, 1250 383, 1288 355" stroke="url(#accentCyan)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M360 510 C 470 458, 550 582, 666 524 C 764 475, 818 315, 922 334 C 1007 350, 1060 470, 1168 428 C 1214 410, 1250 383, 1288 355" stroke="#E8FEFF" stroke-opacity="0.12" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" filter="url(#innerGlow)"/>
+  </g>
+
+  <g fill="#EAF6FF">
+    <circle cx="360" cy="510" r="10" fill="#44E1FF"/>
+    <circle cx="666" cy="524" r="10" fill="#44E1FF"/>
+    <circle cx="922" cy="334" r="10" fill="#44E1FF"/>
+    <circle cx="1168" cy="428" r="10" fill="#44E1FF"/>
+    <circle cx="1288" cy="355" r="10" fill="#44E1FF"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <path d="M800 222 L 944 305 L 944 471 L 800 554 L 656 471 L 656 305 Z" fill="#0B1B33" stroke="#4DD6B9" stroke-opacity="0.35" stroke-width="2.5"/>
+    <path d="M800 245 L 920 314 L 920 454 L 800 523 L 680 454 L 680 314 Z" fill="url(#accentCyan)" fill-opacity="0.1" stroke="#8EF3DA" stroke-opacity="0.4" stroke-width="2"/>
+    <path d="M800 282 L 862 318 L 862 390 L 800 426 L 738 390 L 738 318 Z" fill="#07101D" stroke="#8EF3DA" stroke-opacity="0.8" stroke-width="2"/>
+    <circle cx="800" cy="354" r="22" fill="url(#accentGreen)"/>
+    <circle cx="800" cy="354" r="8" fill="#07111F"/>
+  </g>
+
+  <g stroke="#7AC8FF" stroke-opacity="0.22" stroke-width="2">
+    <path d="M800 245 V 182"/>
+    <path d="M800 523 V 592"/>
+    <path d="M680 314 L 618 282"/>
+    <path d="M920 454 L 988 488"/>
+    <path d="M680 454 L 610 488"/>
+    <path d="M920 314 L 988 282"/>
+  </g>
+
+  <g>
+    <circle cx="800" cy="184" r="16" fill="#44E1FF" fill-opacity="0.16" stroke="#44E1FF" stroke-opacity="0.5"/>
+    <circle cx="800" cy="184" r="6" fill="#44E1FF"/>
+    <circle cx="618" cy="282" r="14" fill="#2FD8A3" fill-opacity="0.16" stroke="#2FD8A3" stroke-opacity="0.55"/>
+    <circle cx="988" cy="282" r="14" fill="#2FD8A3" fill-opacity="0.16" stroke="#2FD8A3" stroke-opacity="0.55"/>
+    <circle cx="610" cy="488" r="14" fill="#5D7CFF" fill-opacity="0.16" stroke="#5D7CFF" stroke-opacity="0.55"/>
+    <circle cx="988" cy="488" r="14" fill="#5D7CFF" fill-opacity="0.16" stroke="#5D7CFF" stroke-opacity="0.55"/>
+    <circle cx="800" cy="592" r="16" fill="#44E1FF" fill-opacity="0.16" stroke="#44E1FF" stroke-opacity="0.5"/>
+    <circle cx="800" cy="592" r="6" fill="#44E1FF"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <rect x="322" y="220" width="236" height="168" rx="22" fill="#0A1323" stroke="#C9E9FF" stroke-opacity="0.12"/>
+    <rect x="1044" y="220" width="236" height="168" rx="22" fill="#0A1323" stroke="#C9E9FF" stroke-opacity="0.12"/>
+    <rect x="322" y="410" width="236" height="168" rx="22" fill="#0A1323" stroke="#C9E9FF" stroke-opacity="0.12"/>
+    <rect x="1044" y="410" width="236" height="168" rx="22" fill="#0A1323" stroke="#C9E9FF" stroke-opacity="0.12"/>
+  </g>
+
+  <g transform="translate(342 240)">
+    <path d="M0 116 H196" stroke="#7AC8FF" stroke-opacity="0.14" stroke-width="2"/>
+    <path d="M0 84 H196" stroke="#7AC8FF" stroke-opacity="0.14" stroke-width="2"/>
+    <path d="M0 52 H196" stroke="#7AC8FF" stroke-opacity="0.14" stroke-width="2"/>
+    <path d="M0 20 H196" stroke="#7AC8FF" stroke-opacity="0.14" stroke-width="2"/>
+    <path d="M0 96 C 28 95, 50 66, 74 72 C 98 78, 108 52, 132 49 C 156 46, 170 28, 196 24" stroke="url(#accentGreen)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M0 96 C 28 95, 50 66, 74 72 C 98 78, 108 52, 132 49 C 156 46, 170 28, 196 24" stroke="#E8FEFF" stroke-opacity="0.1" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="196" cy="24" r="8" fill="#9DFF7A"/>
+  </g>
+
+  <g transform="translate(1064 242)">
+    <circle cx="54" cy="54" r="48" stroke="#7AC8FF" stroke-opacity="0.18" stroke-width="10"/>
+    <circle cx="54" cy="54" r="48" stroke="url(#accentGreen)" stroke-width="10" stroke-linecap="round" stroke-dasharray="238 60" transform="rotate(-110 54 54)"/>
+    <circle cx="54" cy="54" r="28" fill="#07111F" stroke="#7AC8FF" stroke-opacity="0.15"/>
+    <path d="M54 22 V 54 L76 66" stroke="#44E1FF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g transform="translate(342 430)">
+    <rect x="0" y="0" width="196" height="20" rx="10" fill="#10203A"/>
+    <rect x="0" y="0" width="148" height="20" rx="10" fill="url(#accentGreen)"/>
+    <text x="0" y="58" fill="#DCEEFF" fill-opacity="0.82" font-size="18" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" letter-spacing="0.12em">ERROR BUDGET</text>
+    <text x="0" y="94" fill="#FFFFFF" font-size="34" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">74%</text>
+  </g>
+
+  <g transform="translate(1064 430)">
+    <text x="0" y="26" fill="#DCEEFF" fill-opacity="0.82" font-size="18" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" letter-spacing="0.12em">RELIABILITY</text>
+    <text x="0" y="70" fill="#FFFFFF" font-size="34" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">99.9%</text>
+    <text x="0" y="108" fill="#9AC8FF" fill-opacity="0.92" font-size="17" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">Prometheus metrics · burn rate · SLO status</text>
+  </g>
+
+  <text x="800" y="712" text-anchor="middle" fill="#F7FBFF" font-size="72" font-weight="800" letter-spacing="0.02em" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">SloK</text>
+  <text x="800" y="748" text-anchor="middle" fill="#B8D7FF" fill-opacity="0.82" font-size="24" font-weight="500" letter-spacing="0.12em" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">KUBERNETES-NATIVE SLO OPERATOR</text>
+</svg>

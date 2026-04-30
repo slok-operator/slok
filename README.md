@@ -1,15 +1,26 @@
-# SloK
+<h1 align="center">SloK</h1>
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.20%2B-brightgreen.svg)](https://kubernetes.io)
-[![Go Report Card](https://goreportcard.com/badge/github.com/slok-operator/slok)](https://goreportcard.com/report/github.com/slok-operator/slok)
+<hr />
 
-SloK is a Kubernetes-native SLO operator.
+<p align="center">
+  <img src="docs/images/slok-hero.svg" alt="SloK hero illustration" width="1100" />
+</p>
 
-It lets you define Service Level Objectives as Kubernetes resources, generates the
-Prometheus recording and alerting rules needed to monitor them, tracks error budget
-and burn rate, and provides a CLI to backtest SLOs against historical Prometheus data
-before applying them to the cluster.
+<p align="center">Kubernetes-native SLO operator for defining, automating, and backtesting service reliability.</p>
+
+<p align="center">
+  <a href="https://opensource.org/licenses/Apache-2.0"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"></a>
+  <a href="https://kubernetes.io"><img alt="Kubernetes" src="https://img.shields.io/badge/Kubernetes-1.20%2B-brightgreen.svg"></a>
+  <a href="https://goreportcard.com/report/github.com/slok-operator/slok"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/slok-operator/slok"></a>
+</p>
+
+<p align="center">
+  <a href="docs/installation.md">Installation</a> ·
+  <a href="docs/slo.md">SLOs</a> ·
+  <a href="docs/cli.md">CLI</a> ·
+  <a href="docs/dashboard.md">Dashboard</a> ·
+  <a href="docs/README.md">Docs</a>
+</p>
 
 ## What SloK does
 
@@ -22,6 +33,18 @@ before applying them to the cluster.
 - Supports SLO composition for higher-level user journeys.
 - Correlates SLO degradation with recent Kubernetes changes.
 - Ships with an optional web dashboard for browsing SLOs and historical trends.
+
+## Documentation
+
+- [Installation](docs/installation.md)
+- [SLO definitions](docs/slo.md)
+- [CLI backtesting](docs/cli.md)
+- [Dashboard](docs/dashboard.md)
+- [Alerting and recording rules](docs/alerting.md)
+- [SLO composition](docs/composition.md)
+- [Event correlation](docs/correlation.md)
+- [Development](docs/development.md)
+- [Full documentation index](docs/README.md)
 
 ## Quick start
 

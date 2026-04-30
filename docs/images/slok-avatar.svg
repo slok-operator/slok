@@ -1,0 +1,74 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">SloK avatar</title>
+  <desc id="desc">Dark square avatar with a hexagonal SLO motif and connected reliability nodes.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="52" y1="40" x2="460" y2="472" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#07111E"/>
+      <stop offset="0.58" stop-color="#0A1730"/>
+      <stop offset="1" stop-color="#050A13"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 238) rotate(90) scale(160 190)">
+      <stop stop-color="#41D8FF" stop-opacity="0.22"/>
+      <stop offset="0.72" stop-color="#41D8FF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#41D8FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="174" y1="160" x2="340" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#45E0FF"/>
+      <stop offset="0.55" stop-color="#48D6C0"/>
+      <stop offset="1" stop-color="#8BFF84"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000814" flood-opacity="0.62"/>
+    </filter>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0.2  0 0 1 0 0.4  0 0 0 0.7 0" result="g"/>
+      <feBlend in="SourceGraphic" in2="g" mode="screen"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <ellipse cx="256" cy="238" rx="192" ry="172" fill="url(#halo)"/>
+
+  <circle cx="138" cy="160" r="48" fill="#4DE4C0" fill-opacity="0.05"/>
+  <circle cx="390" cy="144" r="56" fill="#5B7DFF" fill-opacity="0.06"/>
+  <circle cx="374" cy="362" r="64" fill="#49D8A8" fill-opacity="0.05"/>
+
+  <g filter="url(#shadow)">
+    <path d="M256 126 L 342 176 L 342 276 L 256 326 L 170 276 L 170 176 Z" fill="#09182D" stroke="#53D7FF" stroke-opacity="0.32" stroke-width="2.5"/>
+    <path d="M256 150 L 320 187 L 320 263 L 256 300 L 192 263 L 192 187 Z" fill="url(#accent)" fill-opacity="0.12" stroke="#A5F9EA" stroke-opacity="0.34" stroke-width="2"/>
+    <path d="M256 180 L 288 198 L 288 242 L 256 260 L 224 242 L 224 198 Z" fill="#07111E" stroke="#A5F9EA" stroke-opacity="0.76" stroke-width="2"/>
+    <circle cx="256" cy="220" r="14" fill="url(#accent)"/>
+    <circle cx="256" cy="220" r="5" fill="#07111E"/>
+  </g>
+
+  <g filter="url(#glow)">
+    <path d="M126 270 C 166 252, 190 294, 228 280 C 256 270, 262 238, 294 242 C 322 246, 338 276, 372 266 C 390 261, 404 252, 418 242" stroke="url(#accent)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M126 270 C 166 252, 190 294, 228 280 C 256 270, 262 238, 294 242 C 322 246, 338 276, 372 266 C 390 261, 404 252, 418 242" stroke="#EAF9FF" stroke-opacity="0.08" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g>
+    <circle cx="126" cy="270" r="8" fill="#46E2FF"/>
+    <circle cx="228" cy="280" r="8" fill="#46E2FF"/>
+    <circle cx="294" cy="242" r="8" fill="#46E2FF"/>
+    <circle cx="372" cy="266" r="8" fill="#46E2FF"/>
+    <circle cx="418" cy="242" r="8" fill="#46E2FF"/>
+  </g>
+
+  <g stroke="#7EC9FF" stroke-opacity="0.22" stroke-width="2">
+    <path d="M256 150 V 104"/>
+    <path d="M256 300 V 344"/>
+    <path d="M192 187 L 154 162"/>
+    <path d="M320 263 L 360 288"/>
+  </g>
+
+  <g>
+    <circle cx="256" cy="104" r="10" fill="#46E2FF" fill-opacity="0.16" stroke="#46E2FF" stroke-opacity="0.5"/>
+    <circle cx="256" cy="104" r="4" fill="#46E2FF"/>
+    <circle cx="154" cy="162" r="9" fill="#49D8A8" fill-opacity="0.16" stroke="#49D8A8" stroke-opacity="0.55"/>
+    <circle cx="360" cy="288" r="9" fill="#5B7DFF" fill-opacity="0.16" stroke="#5B7DFF" stroke-opacity="0.55"/>
+    <circle cx="256" cy="344" r="10" fill="#46E2FF" fill-opacity="0.16" stroke="#46E2FF" stroke-opacity="0.5"/>
+    <circle cx="256" cy="344" r="4" fill="#46E2FF"/>
+  </g>
+</svg>
