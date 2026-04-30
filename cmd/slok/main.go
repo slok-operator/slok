@@ -55,6 +55,11 @@ Read from cluster:
 Read from file:
   slok backtest -f slo.yaml --range 30d
 
+File mode currently reads the SLO identity, target, and window from YAML,
+then backtests against existing SloK recording rules in Prometheus.
+The SLO must already have been applied at least once for those rules to exist.
+True pre-apply backtesting directly from SLI total/error queries is planned.
+
 What-if with multiple targets:
   slok backtest -f slo.yaml --targets 99,99.5,99.9,99.95`,
 		RunE: func(cmd *cobra.Command, args []string) error {
