@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -93,6 +94,15 @@ func TestRunReturnsPrometheusErrors(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "has the operator run at least once") || !errors.Is(err, wantErr) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConfigSupportsRawSLIQueriesForPreApplyYAMLBacktesting(t *testing.T) {
+	configType := reflect.TypeOf(Config{})
+	for _, field := range []string{"TotalQuery", "ErrorQuery"} {
+		if _, ok := configType.FieldByName(field); !ok {
+			t.Fatalf("expected backtest.Config to expose %s for true pre-apply YAML backtesting", field)
+		}
 	}
 }
 

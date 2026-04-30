@@ -9,6 +9,34 @@ import (
 	"testing"
 )
 
+func TestBacktestRangeDefaultsToSLOWindow(t *testing.T) {
+	cmd := newBacktestCmd()
+	flag := cmd.Flags().Lookup("range")
+	if flag == nil {
+		t.Fatal("expected --range flag to exist")
+	}
+	if flag.DefValue != "" {
+		t.Fatalf("expected --range to default to empty so the SLO objective window can be used, got %q", flag.DefValue)
+	}
+}
+
+func TestBacktestCommandExposesTimeoutFlag(t *testing.T) {
+	cmd := newBacktestCmd()
+	if flag := cmd.Flags().Lookup("timeout"); flag == nil {
+		t.Fatal("expected --timeout flag to exist")
+	}
+}
+
+func TestBacktestHelpClarifiesFileModeRequiresExistingRecordingRules(t *testing.T) {
+	cmd := newBacktestCmd()
+	help := cmd.Long + "\n" + cmd.Short
+	for _, want := range []string{"existing SloK recording rules", "pre-apply"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("expected backtest help to mention %q, got:\n%s", want, help)
+		}
+	}
+}
+
 func TestParseTargetsFallsBackToDefault(t *testing.T) {
 	targets, err := parseTargets("", 99.9)
 	if err != nil {
