@@ -50,10 +50,10 @@ func TestRunComputesTargetResults(t *testing.T) {
 	if len(result.Targets) != 2 {
 		t.Fatalf("expected 2 target results, got %d", len(result.Targets))
 	}
-	if got := result.Targets[0]; got.Status != "PASS" || !almostEqual(got.Availability, 99.95) || !almostEqual(got.BudgetBurned, 50) || !almostEqual(got.BudgetRemaining, 50) {
+	if got := result.Targets[0]; got.Status != StatusPass || !almostEqual(got.Availability, 99.95) || !almostEqual(got.BudgetBurned, 50) || !almostEqual(got.BudgetRemaining, 50) {
 		t.Fatalf("unexpected 99.9 target result: %#v", got)
 	}
-	if got := result.Targets[1]; got.Status != "FAIL" || got.BudgetBurned <= 100 || got.BudgetRemaining >= 0 {
+	if got := result.Targets[1]; got.Status != StatusFail || got.BudgetBurned <= 100 || got.BudgetRemaining >= 0 {
 		t.Fatalf("unexpected 99.95 target result: %#v", got)
 	}
 }
@@ -129,7 +129,7 @@ func TestRunUsesRawSLIQueriesForPreApplyBacktesting(t *testing.T) {
 	if result.Source != SourceRawSLIQueries {
 		t.Fatalf("expected raw SLI source, got %q", result.Source)
 	}
-	if got := result.Targets[0]; got.Status != "FAIL" || !almostEqual(got.Availability, 99.75) {
+	if got := result.Targets[0]; got.Status != StatusFail || !almostEqual(got.Availability, 99.75) {
 		t.Fatalf("unexpected target result: %#v", got)
 	}
 }
@@ -163,7 +163,7 @@ func TestConfigSupportsRawSLIQueriesForPreApplyYAMLBacktesting(t *testing.T) {
 func TestComputeTargetResult(t *testing.T) {
 	result := computeTargetResult(99.9, 0.0015)
 
-	if result.Status != "FAIL" {
+	if result.Status != StatusFail {
 		t.Fatalf("expected FAIL, got %s", result.Status)
 	}
 	if !almostEqual(result.Availability, 99.85) {

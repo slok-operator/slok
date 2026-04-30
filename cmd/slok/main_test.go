@@ -150,7 +150,8 @@ spec:
 	if err != nil {
 		t.Fatalf("resolveSLOFromFile returned error: %v", err)
 	}
-	if slo.Name != "checkout" || slo.Namespace != "payments" || slo.ObjectiveName != "availability" || slo.Target != 99.9 || slo.Window != "30d" {
+	if slo.Name != "checkout" || slo.Namespace != "payments" || slo.ObjectiveName != "availability" ||
+		slo.Target != 99.9 || slo.Window != "30d" {
 		t.Fatalf("unexpected SLO fields: %#v", slo)
 	}
 }
@@ -176,7 +177,8 @@ spec:
 	if err != nil {
 		t.Fatalf("resolveSLOFromFile returned error: %v", err)
 	}
-	if slo.TotalQuery != `http_requests_total{job="checkout"}` || slo.ErrorQuery != `http_requests_total{job="checkout",status=~"5.."}` {
+	if slo.TotalQuery != `http_requests_total{job="checkout"}` ||
+		slo.ErrorQuery != `http_requests_total{job="checkout",status=~"5.."}` {
 		t.Fatalf("unexpected raw SLI queries: %#v", slo)
 	}
 }

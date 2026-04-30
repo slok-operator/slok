@@ -77,10 +77,20 @@ What-if with multiple targets:
 	cmd.Flags().StringVar(&name, "name", "", "Name of the ServiceLevelObjective (cluster mode)")
 	cmd.Flags().StringVarP(&file, "file", "f", "", "Path to SLO YAML file (file mode)")
 	cmd.Flags().StringVar(&prometheusURL, "prometheus-url", "http://localhost:9090", "Prometheus base URL")
-	cmd.Flags().StringVar(&rangeStr, "range", "", "Historical range to evaluate (e.g. 30d, 7d, 24h). Defaults to the SLO objective window")
+	cmd.Flags().StringVar(
+		&rangeStr,
+		"range",
+		"",
+		"Historical range to evaluate (e.g. 30d, 7d, 24h). Defaults to the SLO objective window",
+	)
 	cmd.Flags().StringVar(&targetsStr, "targets", "", "Comma-separated target % values for what-if (e.g. 99,99.5,99.9)")
 	cmd.Flags().StringVar(&timeoutStr, "timeout", "30s", "Timeout for Kubernetes and Prometheus requests")
-	cmd.Flags().BoolVar(&preApply, "pre-apply", false, "In file mode, backtest directly from YAML SLI totalQuery/errorQuery instead of existing recording rules")
+	cmd.Flags().BoolVar(
+		&preApply,
+		"pre-apply",
+		false,
+		"In file mode, backtest directly from YAML SLI totalQuery/errorQuery instead of existing recording rules",
+	)
 
 	return cmd
 }

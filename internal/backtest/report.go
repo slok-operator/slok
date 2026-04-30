@@ -18,38 +18,42 @@ func Print(w io.Writer, r *Result) {
 
 func printSingle(w io.Writer, r *Result) {
 	tr := r.Targets[0]
-	fmt.Fprintf(w, "SLO:    %s/%s\n", r.SLOName, r.ObjectiveName)
-	fmt.Fprintf(w, "NS:     %s\n", r.Namespace)
-	fmt.Fprintf(w, "Window: %s\n", r.Range)
+	writef(w, "SLO:    %s/%s\n", r.SLOName, r.ObjectiveName)
+	writef(w, "NS:     %s\n", r.Namespace)
+	writef(w, "Window: %s\n", r.Range)
 	if r.Source != "" {
-		fmt.Fprintf(w, "Source: %s\n", r.Source)
+		writef(w, "Source: %s\n", r.Source)
 	}
-	fmt.Fprintf(w, "Target: %.2f%%\n\n", tr.Target)
-	fmt.Fprintf(w, "Historical result:\n")
-	fmt.Fprintf(w, "  - Availability:        %.4f%%\n", tr.Availability)
-	fmt.Fprintf(w, "  - Error budget burned: %.2f%%\n", tr.BudgetBurned)
-	fmt.Fprintf(w, "  - Budget remaining:    %.2f%%\n", tr.BudgetRemaining)
-	fmt.Fprintf(w, "  - Status:              %s\n", tr.Status)
+	writef(w, "Target: %.2f%%\n\n", tr.Target)
+	writef(w, "Historical result:\n")
+	writef(w, "  - Availability:        %.4f%%\n", tr.Availability)
+	writef(w, "  - Error budget burned: %.2f%%\n", tr.BudgetBurned)
+	writef(w, "  - Budget remaining:    %.2f%%\n", tr.BudgetRemaining)
+	writef(w, "  - Status:              %s\n", tr.Status)
 }
 
 func printTable(w io.Writer, r *Result) {
-	fmt.Fprintf(w, "SLO: %s/%s  |  Namespace: %s  |  Window: %s\n",
+	writef(w, "SLO: %s/%s  |  Namespace: %s  |  Window: %s\n",
 		r.SLOName, r.ObjectiveName, r.Namespace, r.Range)
 	if r.Source != "" {
-		fmt.Fprintf(w, "Source: %s\n", r.Source)
+		writef(w, "Source: %s\n", r.Source)
 	}
-	fmt.Fprintln(w)
+	writef(w, "\n")
 
 	const colFmt = "%-10s  %-14s  %-18s  %s\n"
 	header := fmt.Sprintf(colFmt, "Target", "Availability", "Budget remaining", "Result")
-	fmt.Fprint(w, header)
-	fmt.Fprintln(w, strings.Repeat("-", len(header)-1))
+	writef(w, "%s", header)
+	writef(w, "%s\n", strings.Repeat("-", len(header)-1))
 	for _, tr := range r.Targets {
-		fmt.Fprintf(w, colFmt,
+		writef(w, colFmt,
 			fmt.Sprintf("%.2f%%", tr.Target),
 			fmt.Sprintf("%.4f%%", tr.Availability),
 			fmt.Sprintf("%.2f%%", tr.BudgetRemaining),
 			tr.Status,
 		)
 	}
+}
+
+func writef(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
 }

@@ -11,6 +11,8 @@ import (
 const (
 	SourceRecordingRules = "existing SloK recording rules"
 	SourceRawSLIQueries  = "raw SLI queries from YAML"
+	StatusPass           = "PASS"
+	StatusFail           = "FAIL"
 )
 
 // Config holds all parameters for a backtest run.
@@ -137,9 +139,9 @@ func computeTargetResult(target, errorRate float64) TargetResult {
 	}
 	budgetRemaining := 100 - budgetBurned
 
-	status := "PASS"
+	status := StatusPass
 	if budgetBurned > 100 {
-		status = "FAIL"
+		status = StatusFail
 	}
 
 	return TargetResult{
