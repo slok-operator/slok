@@ -21,6 +21,9 @@ func printSingle(w io.Writer, r *Result) {
 	fmt.Fprintf(w, "SLO:    %s/%s\n", r.SLOName, r.ObjectiveName)
 	fmt.Fprintf(w, "NS:     %s\n", r.Namespace)
 	fmt.Fprintf(w, "Window: %s\n", r.Range)
+	if r.Source != "" {
+		fmt.Fprintf(w, "Source: %s\n", r.Source)
+	}
 	fmt.Fprintf(w, "Target: %.2f%%\n\n", tr.Target)
 	fmt.Fprintf(w, "Historical result:\n")
 	fmt.Fprintf(w, "  - Availability:        %.4f%%\n", tr.Availability)
@@ -30,8 +33,12 @@ func printSingle(w io.Writer, r *Result) {
 }
 
 func printTable(w io.Writer, r *Result) {
-	fmt.Fprintf(w, "SLO: %s/%s  |  Namespace: %s  |  Window: %s\n\n",
+	fmt.Fprintf(w, "SLO: %s/%s  |  Namespace: %s  |  Window: %s\n",
 		r.SLOName, r.ObjectiveName, r.Namespace, r.Range)
+	if r.Source != "" {
+		fmt.Fprintf(w, "Source: %s\n", r.Source)
+	}
+	fmt.Fprintln(w)
 
 	const colFmt = "%-10s  %-14s  %-18s  %s\n"
 	header := fmt.Sprintf(colFmt, "Target", "Availability", "Budget remaining", "Result")

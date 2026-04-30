@@ -33,10 +33,21 @@ func TestBacktestCommandExposesTimeoutFlag(t *testing.T) {
 	}
 }
 
+func TestBacktestCommandExposesPreApplyFlag(t *testing.T) {
+	cmd := newBacktestCmd()
+	flag := cmd.Flags().Lookup("pre-apply")
+	if flag == nil {
+		t.Fatal("expected --pre-apply flag to exist")
+	}
+	if flag.DefValue != "false" {
+		t.Fatalf("expected default pre-apply false, got %q", flag.DefValue)
+	}
+}
+
 func TestBacktestHelpClarifiesFileModeRequiresExistingRecordingRules(t *testing.T) {
 	cmd := newBacktestCmd()
 	help := cmd.Long + "\n" + cmd.Short
-	for _, want := range []string{"existing SloK recording rules", "pre-apply"} {
+	for _, want := range []string{"existing SloK recording rules", "--pre-apply", "totalQuery/errorQuery"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("expected backtest help to mention %q, got:\n%s", want, help)
 		}
@@ -111,6 +122,16 @@ func TestParseTimeoutRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+func TestRunBacktestPreApplyRequiresFile(t *testing.T) {
+	err := runBacktest("default", "checkout", "", "http://prometheus.example", "30d", "99.9", "1s", true)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "--pre-apply requires --file") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestResolveSLOFromFile(t *testing.T) {
 	path := writeTempSLO(t, `
 apiVersion: slok.dev/v1alpha1
@@ -131,6 +152,32 @@ spec:
 	}
 	if slo.Name != "checkout" || slo.Namespace != "payments" || slo.ObjectiveName != "availability" || slo.Target != 99.9 || slo.Window != "30d" {
 		t.Fatalf("unexpected SLO fields: %#v", slo)
+	}
+}
+
+func TestResolveSLOFromFileReadsRawSLIQueries(t *testing.T) {
+	path := writeTempSLO(t, `
+apiVersion: slok.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: checkout
+spec:
+  objective:
+    name: availability
+    target: 99.9
+    window: 30d
+    sli:
+      query:
+        totalQuery: http_requests_total{job="checkout"}
+        errorQuery: http_requests_total{job="checkout",status=~"5.."}
+`)
+
+	slo, err := resolveSLOFromFile(path)
+	if err != nil {
+		t.Fatalf("resolveSLOFromFile returned error: %v", err)
+	}
+	if slo.TotalQuery != `http_requests_total{job="checkout"}` || slo.ErrorQuery != `http_requests_total{job="checkout",status=~"5.."}` {
+		t.Fatalf("unexpected raw SLI queries: %#v", slo)
 	}
 }
 

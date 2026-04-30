@@ -44,6 +44,9 @@ func TestRunComputesTargetResults(t *testing.T) {
 	if result.SLOName != "checkout" || result.Namespace != "default" || result.ObjectiveName != "availability" || result.Range != "30d" {
 		t.Fatalf("unexpected result metadata: %#v", result)
 	}
+	if result.Source != SourceRecordingRules {
+		t.Fatalf("expected recording-rule source, got %q", result.Source)
+	}
 	if len(result.Targets) != 2 {
 		t.Fatalf("expected 2 target results, got %d", len(result.Targets))
 	}
@@ -94,6 +97,57 @@ func TestRunReturnsPrometheusErrors(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "has the operator run at least once") || !errors.Is(err, wantErr) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunUsesRawSLIQueriesForPreApplyBacktesting(t *testing.T) {
+	client := &fakePrometheusClient{value: 0.0025}
+	result, err := New(client).Run(context.Background(), Config{
+		Namespace:     "default",
+		Name:          "checkout",
+		ObjectiveName: "availability",
+		Range:         "30d",
+		Targets:       []float64{99.9},
+		TotalQuery:    `http_requests_total{job="checkout"}`,
+		ErrorQuery:    `http_requests_total{job="checkout",status=~"5.."}`,
+	})
+	if err != nil {
+		t.Fatalf("Run() returned error: %v", err)
+	}
+
+	for _, want := range []string{
+		`sum(increase(http_requests_total{job="checkout",status=~"5.."}[30d]))`,
+		`clamp_min(sum(increase(http_requests_total{job="checkout"}[30d])), 1e-12)`,
+	} {
+		if !strings.Contains(client.query, want) {
+			t.Fatalf("raw query %q does not contain %q", client.query, want)
+		}
+	}
+	if strings.Contains(client.query, "slok:sli_error_rate") {
+		t.Fatalf("raw query should not use recording rules: %q", client.query)
+	}
+	if result.Source != SourceRawSLIQueries {
+		t.Fatalf("expected raw SLI source, got %q", result.Source)
+	}
+	if got := result.Targets[0]; got.Status != "FAIL" || !almostEqual(got.Availability, 99.75) {
+		t.Fatalf("unexpected target result: %#v", got)
+	}
+}
+
+func TestRunRequiresBothRawSLIQueries(t *testing.T) {
+	for _, cfg := range []Config{
+		{Range: "30d", Targets: []float64{99.9}, TotalQuery: `http_requests_total`},
+		{Range: "30d", Targets: []float64{99.9}, ErrorQuery: `http_requests_total{status=~"5.."}`},
+	} {
+		t.Run("partial raw query", func(t *testing.T) {
+			_, err := New(&fakePrometheusClient{}).Run(context.Background(), cfg)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "requires both totalQuery and errorQuery") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
