@@ -518,3 +518,137 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_UnknownAlias(t *testing.
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+func TestCreatePrometheusRuleUsesCustomBurnRateAlerts(t *testing.T) {
+	objective := observabilityv1alpha1.Objective{
+		Name:   "availability",
+		Target: 99.9,
+		Window: "30d",
+		Sli: observabilityv1alpha1.SLI{
+			Query: &observabilityv1alpha1.Query{
+				TotalQuery: "http_requests_total",
+				ErrorQuery: `http_requests_total{status=~"5.."}`,
+			},
+		},
+		Alerting: &observabilityv1alpha1.Alerting{
+			BurnRateAlerts: &observabilityv1alpha1.BurnRates{
+				Enabled: true,
+				Alerts: []observabilityv1alpha1.BurnRateAlert{
+					{
+						Name:           "TicketPage",
+						ConsumePercent: 2,
+						ConsumeWindow:  "1h",
+						LongWindow:     "1h",
+						ShortWindow:    "5m",
+						Severity:       "critical",
+					},
+				},
+			},
+		},
+	}
+
+	rule, err := CreatePrometheusRule("checkout", "prod", objective)
+	if err != nil {
+		t.Fatalf("CreatePrometheusRule returned error: %v", err)
+	}
+
+	if len(rule.Spec.Groups) != 2 {
+		t.Fatalf("expected recording and alert groups, got %d groups", len(rule.Spec.Groups))
+	}
+
+	alertGroup := rule.Spec.Groups[1]
+	if len(alertGroup.Rules) != 2 {
+		t.Fatalf("expected one custom burn-rate alert plus budget-exhausted alert, got %d rules", len(alertGroup.Rules))
+	}
+
+	alert := alertGroup.Rules[0]
+	expr := alert.Expr.String()
+
+	if !strings.Contains(alert.Alert, "TicketPage") {
+		t.Fatalf("expected custom alert name to be used, got: %s", alert.Alert)
+	}
+	if !strings.Contains(expr, "slok:burn_rate:5m") {
+		t.Fatalf("expected custom short window in expression, got: %s", expr)
+	}
+	if !strings.Contains(expr, "slok:burn_rate:1h") {
+		t.Fatalf("expected custom long window in expression, got: %s", expr)
+	}
+	if !strings.Contains(expr, "> 14.4") {
+		t.Fatalf("expected threshold calculated from consumePercent/window, got: %s", expr)
+	}
+	if alert.Labels["severity"] != "critical" {
+		t.Fatalf("expected custom severity critical, got: %s", alert.Labels["severity"])
+	}
+	if alert.For == nil || *alert.For != "1h" {
+		t.Fatalf("expected alert for duration to come from custom consumeWindow, got: %v", alert.For)
+	}
+}
+
+func TestCreatePrometheusRuleDefaultBurnRateAlertsRemainWithoutCustomAlerts(t *testing.T) {
+	objective := observabilityv1alpha1.Objective{
+		Name:   "availability",
+		Target: 99.9,
+		Window: "30d",
+		Sli: observabilityv1alpha1.SLI{
+			Query: &observabilityv1alpha1.Query{
+				TotalQuery: "http_requests_total",
+				ErrorQuery: `http_requests_total{status=~"5.."}`,
+			},
+		},
+		Alerting: &observabilityv1alpha1.Alerting{
+			BurnRateAlerts: &observabilityv1alpha1.BurnRates{
+				Enabled: true,
+			},
+		},
+	}
+
+	rule, err := CreatePrometheusRule("checkout", "prod", objective)
+	if err != nil {
+		t.Fatalf("CreatePrometheusRule returned error: %v", err)
+	}
+
+	alertGroup := rule.Spec.Groups[1]
+	expectedRules := len(defaultBurnRatePresets) + 1
+	if len(alertGroup.Rules) != expectedRules {
+		t.Fatalf("expected %d default alert rules, got %d", expectedRules, len(alertGroup.Rules))
+	}
+
+	firstBurnRateAlert := alertGroup.Rules[0]
+	if firstBurnRateAlert.For == nil || *firstBurnRateAlert.For != defaultBurnRatePresets[0].For {
+		t.Fatalf("expected default alert for duration %q, got %v", defaultBurnRatePresets[0].For, firstBurnRateAlert.For)
+	}
+}
+
+func TestCreatePrometheusRuleRejectsInvalidCustomBurnRateWindow(t *testing.T) {
+	objective := observabilityv1alpha1.Objective{
+		Name:   "availability",
+		Target: 99.9,
+		Window: "30d",
+		Sli: observabilityv1alpha1.SLI{
+			Query: &observabilityv1alpha1.Query{
+				TotalQuery: "http_requests_total",
+				ErrorQuery: `http_requests_total{status=~"5.."}`,
+			},
+		},
+		Alerting: &observabilityv1alpha1.Alerting{
+			BurnRateAlerts: &observabilityv1alpha1.BurnRates{
+				Enabled: true,
+				Alerts: []observabilityv1alpha1.BurnRateAlert{
+					{
+						Name:           "BadWindow",
+						ConsumePercent: 2,
+						ConsumeWindow:  "soon",
+						LongWindow:     "1h",
+						ShortWindow:    "5m",
+						Severity:       "critical",
+					},
+				},
+			},
+		},
+	}
+
+	_, err := CreatePrometheusRule("checkout", "prod", objective)
+	if err == nil {
+		t.Fatalf("expected invalid custom burn-rate window to return an error")
+	}
+}
