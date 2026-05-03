@@ -518,3 +518,35 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_UnknownAlias(t *testing.
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+func TestPromQLLogicalOperatorsAreLowercaseAndWindowSafe(t *testing.T) {
+	errorRateExpr := sliErrorRateExpr("http_requests_total", `http_requests_total{status=~"5.."}`, "5m")
+	if strings.Contains(errorRateExpr, " OR ") {
+		t.Fatalf("expected lowercase or in SLI error rate expression, got: %s", errorRateExpr)
+	}
+	if !strings.Contains(errorRateExpr, " or ") {
+		t.Fatalf("expected SLI error rate expression to contain lowercase or, got: %s", errorRateExpr)
+	}
+
+	preset := burnRatePreset{
+		ShortWindow: "5m",
+		LongWindow:  "1h",
+		BurnRate:    14,
+	}
+
+	alertExpr := burnRateAlertExpr("checkout", "prod", "availability", preset)
+	if strings.Contains(alertExpr, " AND ") {
+		t.Fatalf("expected lowercase and in burn-rate alert expression, got: %s", alertExpr)
+	}
+	if !strings.Contains(alertExpr, " and on (slo_name, slo_namespace, objective_name) ") {
+		t.Fatalf("expected burn-rate alert expression to match on SLO identity labels, got: %s", alertExpr)
+	}
+
+	compositionExpr := burnRateAlertExprComposition("checkout-flow", "prod", preset)
+	if strings.Contains(compositionExpr, " AND ") {
+		t.Fatalf("expected lowercase and in burn-rate composition expression, got: %s", compositionExpr)
+	}
+	if !strings.Contains(compositionExpr, " and on (slo_composition_name, slo_composition_namespace) ") {
+		t.Fatalf("expected burn-rate composition expression to match on composition identity labels, got: %s", compositionExpr)
+	}
+}
