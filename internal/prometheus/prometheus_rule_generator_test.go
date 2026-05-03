@@ -518,3 +518,66 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_UnknownAlias(t *testing.
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+func TestDefaultBurnRatePresetsIncludesDocumentedSlowBurn(t *testing.T) {
+	if len(defaultBurnRatePresets) != 4 {
+		t.Fatalf("expected 4 default burn-rate presets, got %d", len(defaultBurnRatePresets))
+	}
+
+	found := false
+	for _, preset := range defaultBurnRatePresets {
+		if preset.ShortWindow == "7d" &&
+			preset.LongWindow == "30d" &&
+			preset.BurnRate == 0.5 &&
+			preset.Severity == severityWarning &&
+			preset.AlertSuffix == "SlowBurn" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Fatalf("expected default burn-rate presets to include documented 7d/30d > 0.5x slow-burn preset")
+	}
+}
+
+func TestCreatePrometheusRuleIncludesDocumentedSlowBurnAlert(t *testing.T) {
+	objective := observabilityv1alpha1.Objective{
+		Name:   "availability",
+		Target: 99.9,
+		Window: "30d",
+		Sli: observabilityv1alpha1.SLI{
+			Query: &observabilityv1alpha1.Query{
+				TotalQuery: "http_requests_total",
+				ErrorQuery: `http_requests_total{status=~"5.."}`,
+			},
+		},
+		Alerting: &observabilityv1alpha1.Alerting{
+			BurnRateAlerts: &observabilityv1alpha1.BurnRates{
+				Enabled: true,
+			},
+		},
+	}
+
+	rule, err := CreatePrometheusRule("checkout", "prod", objective)
+	if err != nil {
+		t.Fatalf("CreatePrometheusRule returned error: %v", err)
+	}
+
+	found := false
+	for _, group := range rule.Spec.Groups {
+		for _, generatedRule := range group.Rules {
+			expr := generatedRule.Expr.String()
+			if strings.Contains(generatedRule.Alert, "SlowBurn") &&
+				strings.Contains(expr, "slok:burn_rate:7d") &&
+				strings.Contains(expr, "slok:burn_rate:30d") &&
+				strings.Contains(expr, "> 0.5") {
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		t.Fatalf("expected generated rules to include documented 7d/30d slow-burn alert")
+	}
+}

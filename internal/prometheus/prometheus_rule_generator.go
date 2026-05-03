@@ -33,6 +33,7 @@ var defaultBurnRatePresets = []burnRatePreset{
 	{ShortWindow: "5m", LongWindow: "1h", BurnRate: 14, Severity: "critical", AlertSuffix: "Critical", For: "2m"},
 	{ShortWindow: "1h", LongWindow: "6h", BurnRate: 6, Severity: severityWarning, AlertSuffix: "Degraded", For: "15m"},
 	{ShortWindow: "6h", LongWindow: "3d", BurnRate: 1, Severity: severityWarning, AlertSuffix: "Warning", For: "1h"},
+	{ShortWindow: "7d", LongWindow: "30d", BurnRate: 0.5, Severity: severityWarning, AlertSuffix: "SlowBurn", For: "3h"},
 }
 
 const severityWarning = "warning"
