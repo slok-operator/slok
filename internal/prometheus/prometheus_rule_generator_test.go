@@ -579,7 +579,7 @@ func TestCreatePrometheusRuleUsesCustomBurnRateAlerts(t *testing.T) {
 	if alert.Labels["severity"] != "critical" {
 		t.Fatalf("expected custom severity critical, got: %s", alert.Labels["severity"])
 	}
-	if alert.For == nil || *alert.For != "1h" {
+	if alert.For == nil || string(*alert.For) != "1h" {
 		t.Fatalf("expected alert for duration to come from custom consumeWindow, got: %v", alert.For)
 	}
 }
@@ -614,7 +614,7 @@ func TestCreatePrometheusRuleDefaultBurnRateAlertsRemainWithoutCustomAlerts(t *t
 	}
 
 	firstBurnRateAlert := alertGroup.Rules[0]
-	if firstBurnRateAlert.For == nil || *firstBurnRateAlert.For != defaultBurnRatePresets[0].For {
+	if firstBurnRateAlert.For == nil || string(*firstBurnRateAlert.For) != defaultBurnRatePresets[0].For {
 		t.Fatalf("expected default alert for duration %q, got %v", defaultBurnRatePresets[0].For, firstBurnRateAlert.For)
 	}
 }
