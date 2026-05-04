@@ -412,6 +412,7 @@ func CreateAggregatedPrometheusRule(sloCompositionName, sloCompositionNamespace 
 		return monitoringv1.PrometheusRule{}, fmt.Errorf("unsupported composition type: %s", spec.Composition.Type)
 	}
 }
+
 func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv1alpha1.Objective) (monitoringv1.PrometheusRule, error) {
 	objectiveName := objective.Name
 
