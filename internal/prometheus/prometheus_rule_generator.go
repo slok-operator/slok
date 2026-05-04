@@ -67,7 +67,7 @@ func baseLabelsComposition(compositionName, compositionNamespace, window string)
 // via the OR absent(...) fallback.
 func sliErrorRateExpr(errorQuery, totalQuery, window string) string {
 	return fmt.Sprintf(
-		"((sum(rate(%s[%s])) or (sum(rate(%s[%s])) * 0)) / clamp_min(sum(rate(%s[%s])), 1e-12)) or absent(sum(rate(%s[%s])))",
+		"((sum(rate(%s[%s])) OR (sum(rate(%s[%s])) * 0)) / clamp_min(sum(rate(%s[%s])), 1e-12)) OR absent(sum(rate(%s[%s])))",
 		errorQuery, window, totalQuery, window, totalQuery, window, totalQuery, window,
 	)
 }
@@ -94,9 +94,8 @@ func burnRateExprComposition(compositionName, compositionNamespace, window strin
 // burnRateAlertExprComposition builds the multi-window burn rate alert expression for a composition.
 func burnRateAlertExprComposition(compositionName, compositionNamespace string, preset burnRatePreset) string {
 	selector := fmt.Sprintf(`slo_composition_name="%s", slo_composition_namespace="%s"`, compositionName, compositionNamespace)
-
 	return fmt.Sprintf(
-		"slok:burn_rate_composition:%s{%s} > %g and on (slo_composition_name, slo_composition_namespace) slok:burn_rate_composition:%s{%s} > %g",
+		"slok:burn_rate_composition:%s{%s} > %g AND slok:burn_rate_composition:%s{%s} > %g",
 		preset.ShortWindow, selector, preset.BurnRate,
 		preset.LongWindow, selector, preset.BurnRate,
 	)
@@ -105,9 +104,8 @@ func burnRateAlertExprComposition(compositionName, compositionNamespace string, 
 // burnRateAlertExpr builds the multi-window burn rate alert expression
 func burnRateAlertExpr(sloName, sloNamespace, objectiveName string, preset burnRatePreset) string {
 	selector := fmt.Sprintf(`slo_name="%s", slo_namespace="%s", objective_name="%s"`, sloName, sloNamespace, objectiveName)
-
 	return fmt.Sprintf(
-		"slok:burn_rate:%s{%s} > %g and on (slo_name, slo_namespace, objective_name) slok:burn_rate:%s{%s} > %g",
+		"slok:burn_rate:%s{%s} > %g AND slok:burn_rate:%s{%s} > %g",
 		preset.ShortWindow, selector, preset.BurnRate,
 		preset.LongWindow, selector, preset.BurnRate,
 	)
