@@ -34,9 +34,44 @@ var defaultBurnRatePresets = []burnRatePreset{
 	{ShortWindow: "5m", LongWindow: "1h", BurnRate: 14, Severity: "critical", AlertSuffix: "Critical", For: "2m"},
 	{ShortWindow: "1h", LongWindow: "6h", BurnRate: 6, Severity: severityWarning, AlertSuffix: "Degraded", For: "15m"},
 	{ShortWindow: "6h", LongWindow: "3d", BurnRate: 1, Severity: severityWarning, AlertSuffix: "Warning", For: "1h"},
+	{ShortWindow: "7d", LongWindow: "30d", BurnRate: 0.5, Severity: severityWarning, AlertSuffix: "SlowBurn", For: "3h"},
 }
 
 const severityWarning = "warning"
+
+func isRecordingWindow(window string) bool {
+	for _, recordingWindow := range recordingWindows {
+		if window == recordingWindow {
+			return true
+		}
+	}
+
+	return false
+}
+
+func validateBurnRateAlertWindows(alert observabilityv1alpha1.BurnRateAlert) error {
+	validWindows := strings.Join(recordingWindows, ", ")
+
+	if !isRecordingWindow(alert.ShortWindow) {
+		return fmt.Errorf(
+			"invalid burn-rate alert %q: shortWindow %q must be one of the recording windows: %s",
+			alert.Name,
+			alert.ShortWindow,
+			validWindows,
+		)
+	}
+
+	if !isRecordingWindow(alert.LongWindow) {
+		return fmt.Errorf(
+			"invalid burn-rate alert %q: longWindow %q must be one of the recording windows: %s",
+			alert.Name,
+			alert.LongWindow,
+			validWindows,
+		)
+	}
+
+	return nil
+}
 
 func parseAlertWindowHours(window string) (float64, error) {
 	if len(window) < 2 {
@@ -87,6 +122,10 @@ func burnRatePresetsForObjective(objective observabilityv1alpha1.Objective) ([]b
 	presets := make([]burnRatePreset, 0, len(burnRates.Alerts))
 
 	for _, alert := range burnRates.Alerts {
+		if err := validateBurnRateAlertWindows(alert); err != nil {
+			return nil, err
+		}
+
 		threshold, err := burnRateThreshold(alert, objective.Window)
 		if err != nil {
 			return nil, fmt.Errorf("invalid burn-rate alert %q: %w", alert.Name, err)
@@ -98,7 +137,6 @@ func burnRatePresetsForObjective(objective observabilityv1alpha1.Objective) ([]b
 			BurnRate:    threshold,
 			Severity:    alert.Severity,
 			AlertSuffix: alert.Name,
-			For:         alert.ConsumeWindow,
 		})
 	}
 
@@ -135,7 +173,7 @@ func baseLabelsComposition(compositionName, compositionNamespace, window string)
 // via the OR absent(...) fallback.
 func sliErrorRateExpr(errorQuery, totalQuery, window string) string {
 	return fmt.Sprintf(
-		"((sum(rate(%s[%s])) OR (sum(rate(%s[%s])) * 0)) / clamp_min(sum(rate(%s[%s])), 1e-12)) OR absent(sum(rate(%s[%s])))",
+		"((sum(rate(%s[%s])) or (sum(rate(%s[%s])) * 0)) / clamp_min(sum(rate(%s[%s])), 1e-12)) or absent(sum(rate(%s[%s])))",
 		errorQuery, window, totalQuery, window, totalQuery, window, totalQuery, window,
 	)
 }
@@ -163,7 +201,7 @@ func burnRateExprComposition(compositionName, compositionNamespace, window strin
 func burnRateAlertExprComposition(compositionName, compositionNamespace string, preset burnRatePreset) string {
 	selector := fmt.Sprintf(`slo_composition_name="%s", slo_composition_namespace="%s"`, compositionName, compositionNamespace)
 	return fmt.Sprintf(
-		"slok:burn_rate_composition:%s{%s} > %g AND slok:burn_rate_composition:%s{%s} > %g",
+		"slok:burn_rate_composition:%s{%s} > %g and on (slo_composition_name, slo_composition_namespace) slok:burn_rate_composition:%s{%s} > %g",
 		preset.ShortWindow, selector, preset.BurnRate,
 		preset.LongWindow, selector, preset.BurnRate,
 	)
@@ -173,7 +211,7 @@ func burnRateAlertExprComposition(compositionName, compositionNamespace string, 
 func burnRateAlertExpr(sloName, sloNamespace, objectiveName string, preset burnRatePreset) string {
 	selector := fmt.Sprintf(`slo_name="%s", slo_namespace="%s", objective_name="%s"`, sloName, sloNamespace, objectiveName)
 	return fmt.Sprintf(
-		"slok:burn_rate:%s{%s} > %g AND slok:burn_rate:%s{%s} > %g",
+		"slok:burn_rate:%s{%s} > %g and on (slo_name, slo_namespace, objective_name) slok:burn_rate:%s{%s} > %g",
 		preset.ShortWindow, selector, preset.BurnRate,
 		preset.LongWindow, selector, preset.BurnRate,
 	)
@@ -538,7 +576,6 @@ func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv
 			alertGroup.Rules = append(alertGroup.Rules, monitoringv1.Rule{
 				Alert:  fmt.Sprintf("Objective: %s SLOBurnRateHigh - %s", objectiveName, preset.AlertSuffix),
 				Expr:   intstr.FromString(burnRateAlertExpr(sloName, sloNamespace, objectiveName, preset)),
-				For:    monitoringv1.DurationPointer(preset.For),
 				Labels: baseLabels(sloName, sloNamespace, objectiveName, preset.ShortWindow),
 			})
 			alertGroup.Rules[len(alertGroup.Rules)-1].Labels["severity"] = preset.Severity

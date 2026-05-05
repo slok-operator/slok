@@ -47,7 +47,6 @@ func TestCreateAggregatedPrometheusRule_AND_MIN(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Metadata
 	if rule.Name != "slok-checkout-flow-production-aggregated" {
 		t.Errorf("name: got %q, want %q", rule.Name, "slok-checkout-flow-production-aggregated")
 	}
@@ -58,7 +57,6 @@ func TestCreateAggregatedPrometheusRule_AND_MIN(t *testing.T) {
 		t.Errorf("label slok.io/slo_composition: got %q, want %q", rule.Labels["slok.io/slo_composition"], "checkout-flow")
 	}
 
-	// One group (no alerting)
 	if len(rule.Spec.Groups) != 1 {
 		t.Fatalf("groups: got %d, want 1", len(rule.Spec.Groups))
 	}
@@ -66,16 +64,12 @@ func TestCreateAggregatedPrometheusRule_AND_MIN(t *testing.T) {
 		t.Errorf("group name: got %q, want %q", rule.Spec.Groups[0].Name, "slok-checkout-flow-aggregated")
 	}
 
-	// Expected rules: len(recordingWindows) sli_error_composition_rate
-	//               + 1 objective_target + 1 error_budget_target
-	//               + len(recordingWindows) burn_rate
 	expectedRules := len(recordingWindows)*2 + 2
 	rules := rule.Spec.Groups[0].Rules
 	if len(rules) != expectedRules {
 		t.Fatalf("rules count: got %d, want %d", len(rules), expectedRules)
 	}
 
-	// First len(recordingWindows) rules: slok:sli_error_composition_rate:{window}
 	for i, window := range recordingWindows {
 		r := rules[i]
 
@@ -102,7 +96,6 @@ func TestCreateAggregatedPrometheusRule_AND_MIN(t *testing.T) {
 			t.Errorf("rule[%d] expr should use regex match (=~): %s", i, expr)
 		}
 
-		// Labels
 		if r.Labels["slo_composition_name"] != "checkout-flow" {
 			t.Errorf("rule[%d] label slo_composition_name: got %q, want %q", i, r.Labels["slo_composition_name"], "checkout-flow")
 		}
@@ -114,7 +107,6 @@ func TestCreateAggregatedPrometheusRule_AND_MIN(t *testing.T) {
 		}
 	}
 
-	// objective_target_composition rule
 	objTargetRule := rules[len(recordingWindows)]
 	if objTargetRule.Record != "slok:objective_target_composition" {
 		t.Errorf("objective_target record: got %q, want %q", objTargetRule.Record, "slok:objective_target_composition")
@@ -123,13 +115,11 @@ func TestCreateAggregatedPrometheusRule_AND_MIN(t *testing.T) {
 		t.Errorf("objective_target expr should be a vector: %s", objTargetRule.Expr.String())
 	}
 
-	// error_budget_target_composition rule
 	budgetTargetRule := rules[len(recordingWindows)+1]
 	if budgetTargetRule.Record != "slok:error_budget_target_composition" {
 		t.Errorf("error_budget_target record: got %q, want %q", budgetTargetRule.Record, "slok:error_budget_target_composition")
 	}
 
-	// burn_rate_composition rules
 	burnRateOffset := len(recordingWindows) + 2
 	for i, window := range recordingWindows {
 		r := rules[burnRateOffset+i]
@@ -156,7 +146,6 @@ func TestCreateAggregatedPrometheusRule_WithBurnRateAlerts(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Two groups: recording + alert
 	if len(rule.Spec.Groups) != 2 {
 		t.Fatalf("groups: got %d, want 2", len(rule.Spec.Groups))
 	}
@@ -166,13 +155,11 @@ func TestCreateAggregatedPrometheusRule_WithBurnRateAlerts(t *testing.T) {
 		t.Errorf("alert group name: got %q, want %q", alertGroup.Name, "slok-checkout-flow-aggregated-burnRateAlerts")
 	}
 
-	// len(defaultBurnRatePresets) preset alerts + 1 budget exhausted alert
 	expectedAlerts := len(defaultBurnRatePresets) + 1
 	if len(alertGroup.Rules) != expectedAlerts {
 		t.Fatalf("alert rules count: got %d, want %d", len(alertGroup.Rules), expectedAlerts)
 	}
 
-	// Each preset alert references slok:burn_rate_composition
 	for i, preset := range defaultBurnRatePresets {
 		expr := alertGroup.Rules[i].Expr.String()
 		if !strings.Contains(expr, "slok:burn_rate_composition:"+preset.ShortWindow) {
@@ -183,7 +170,6 @@ func TestCreateAggregatedPrometheusRule_WithBurnRateAlerts(t *testing.T) {
 		}
 	}
 
-	// Budget exhausted alert references slok:sli_error_composition_rate and the composition window
 	lastAlert := alertGroup.Rules[len(alertGroup.Rules)-1]
 	if !strings.Contains(lastAlert.Expr.String(), "slok:sli_error_composition_rate:30d") {
 		t.Errorf("budget alert expr missing sli_error_composition_rate:30d: %s", lastAlert.Expr.String())
@@ -221,8 +207,6 @@ func TestCreateAggregatedPrometheusRule_UnsupportedType(t *testing.T) {
 	}
 }
 
-// --- WEIGHTED_ROUTES helpers ---
-
 func makeSLORef(alias, sloName, namespace string) observabilityv1alpha1.SLORef {
 	return observabilityv1alpha1.SLORef{
 		Name: alias,
@@ -245,10 +229,6 @@ func makeWeightedSpec(window string, objectives []observabilityv1alpha1.SLORef, 
 	}
 }
 
-// checkoutWeightedFixture returns the SLOs and spec for the canonical checkout example:
-//
-//	route no-coupon  (weight 0.9): base → payments
-//	route with-coupon (weight 0.1): base → coupon → payments
 func checkoutWeightedFixture(alerting *observabilityv1alpha1.Alerting) (
 	[]observabilityv1alpha1.ServiceLevelObjective,
 	observabilityv1alpha1.SLOCompositionSpec,
@@ -308,9 +288,6 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_RuleCount(t *testing.T) 
 		t.Errorf("group name: got %q, want %q", rule.Spec.Groups[0].Name, "slok-checkout-weighted-aggregated")
 	}
 
-	// len(recordingWindows) sli_error_composition_rate
-	// + 1 objective_target + 1 error_budget_target
-	// + len(recordingWindows) burn_rate
 	expected := len(recordingWindows)*2 + 2
 	got := len(rule.Spec.Groups[0].Rules)
 	if got != expected {
@@ -337,25 +314,19 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_ExprFormula(t *testing.T
 
 		expr := r.Expr.String()
 
-		// Top-level structure: 1 - (...)
 		if !strings.HasPrefix(expr, "1 - (") {
 			t.Errorf("rule[%d] expr should start with '1 - (': %s", i, expr)
 		}
-
-		// Both route weights present
 		if !strings.Contains(expr, "0.9 *") {
 			t.Errorf("rule[%d] expr missing weight 0.9: %s", i, expr)
 		}
 		if !strings.Contains(expr, "0.1 *") {
 			t.Errorf("rule[%d] expr missing weight 0.1: %s", i, expr)
 		}
-
-		// Success-rate form (1 - scalar(...))
 		if !strings.Contains(expr, "(1 - scalar(") {
 			t.Errorf("rule[%d] expr missing '(1 - scalar(': %s", i, expr)
 		}
 
-		// All three SLOs referenced with correct window
 		for _, sloName := range []string{"checkout-base-slo", "payments-slo", "coupon-slo"} {
 			want := `slo_name="` + sloName + `"`
 			if !strings.Contains(expr, want) {
@@ -391,7 +362,6 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_Labels(t *testing.T) {
 		}
 	}
 
-	// objective_target and error_budget_target use "30d" as window label
 	objTarget := rules[len(recordingWindows)]
 	if objTarget.Record != "slok:objective_target_composition" {
 		t.Errorf("objective_target record: got %q", objTarget.Record)
@@ -459,7 +429,6 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_WithBurnRateAlerts(t *te
 		}
 	}
 
-	// Budget exhausted alert
 	lastAlert := alertGroup.Rules[len(alertGroup.Rules)-1]
 	if !strings.Contains(lastAlert.Expr.String(), "slok:sli_error_composition_rate:30d") {
 		t.Errorf("budget alert expr missing sli_error_composition_rate:30d: %s", lastAlert.Expr.String())
@@ -473,7 +442,8 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_SingleRoute(t *testing.T
 	slos := []observabilityv1alpha1.ServiceLevelObjective{
 		makeSLO("api-slo", "default", "availability"),
 	}
-	spec := makeWeightedSpec("30d",
+	spec := makeWeightedSpec(
+		"30d",
 		[]observabilityv1alpha1.SLORef{makeSLORef("api", "api-slo", "default")},
 		[]observabilityv1alpha1.Route{
 			{Name: "main", Weight: 1.0, Chain: []string{"api"}},
@@ -499,10 +469,11 @@ func TestCreateAggregatedPrometheusRule_WEIGHTED_ROUTES_UnknownAlias(t *testing.
 	slos := []observabilityv1alpha1.ServiceLevelObjective{
 		makeSLO("api-slo", "default", "availability"),
 	}
-	spec := makeWeightedSpec("30d",
+	spec := makeWeightedSpec(
+		"30d",
 		[]observabilityv1alpha1.SLORef{makeSLORef("api", "api-slo", "default")},
 		[]observabilityv1alpha1.Route{
-			{Name: "bad-route", Weight: 1.0, Chain: []string{"api", "ghost"}}, // "ghost" not in objectives
+			{Name: "bad-route", Weight: 1.0, Chain: []string{"api", "ghost"}},
 		},
 		nil,
 	)
@@ -579,8 +550,8 @@ func TestCreatePrometheusRuleUsesCustomBurnRateAlerts(t *testing.T) {
 	if alert.Labels["severity"] != "critical" {
 		t.Fatalf("expected custom severity critical, got: %s", alert.Labels["severity"])
 	}
-	if alert.For == nil || string(*alert.For) != "1h" {
-		t.Fatalf("expected alert for duration to come from custom consumeWindow, got: %v", alert.For)
+	if alert.For != nil {
+		t.Fatalf("expected custom burn-rate alert for duration to remain unset, got: %v", alert.For)
 	}
 }
 
@@ -614,8 +585,8 @@ func TestCreatePrometheusRuleDefaultBurnRateAlertsRemainWithoutCustomAlerts(t *t
 	}
 
 	firstBurnRateAlert := alertGroup.Rules[0]
-	if firstBurnRateAlert.For == nil || string(*firstBurnRateAlert.For) != defaultBurnRatePresets[0].For {
-		t.Fatalf("expected default alert for duration %q, got %v", defaultBurnRatePresets[0].For, firstBurnRateAlert.For)
+	if firstBurnRateAlert.For != nil {
+		t.Fatalf("expected default burn-rate alert for duration to remain unset, got: %v", firstBurnRateAlert.For)
 	}
 }
 
@@ -650,5 +621,119 @@ func TestCreatePrometheusRuleRejectsInvalidCustomBurnRateWindow(t *testing.T) {
 	_, err := CreatePrometheusRule("checkout", "prod", objective)
 	if err == nil {
 		t.Fatalf("expected invalid custom burn-rate window to return an error")
+	}
+}
+
+func TestCreatePrometheusRuleRejectsCustomBurnRateAlertWithUnknownShortWindow(t *testing.T) {
+	objective := observabilityv1alpha1.Objective{
+		Name:   "availability",
+		Target: 99.9,
+		Window: "30d",
+		Sli: observabilityv1alpha1.SLI{
+			Query: &observabilityv1alpha1.Query{
+				TotalQuery: "http_requests_total",
+				ErrorQuery: `http_requests_total{status=~"5.."}`,
+			},
+		},
+		Alerting: &observabilityv1alpha1.Alerting{
+			BurnRateAlerts: &observabilityv1alpha1.BurnRates{
+				Enabled: true,
+				Alerts: []observabilityv1alpha1.BurnRateAlert{
+					{
+						Name:           "TicketPage",
+						ConsumePercent: 2,
+						ConsumeWindow:  "1h",
+						LongWindow:     "1h",
+						ShortWindow:    "10m",
+						Severity:       "critical",
+					},
+				},
+			},
+		},
+	}
+
+	_, err := CreatePrometheusRule("checkout", "prod", objective)
+	if err == nil {
+		t.Fatalf("expected invalid custom shortWindow to return an error")
+	}
+
+	if !strings.Contains(err.Error(), `shortWindow "10m"`) {
+		t.Fatalf("expected error to mention invalid shortWindow, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "5m, 1h, 6h, 3d, 7d, 30d") {
+		t.Fatalf("expected error to list valid recording windows, got: %v", err)
+	}
+}
+
+func TestCreatePrometheusRuleRejectsCustomBurnRateAlertWithUnknownLongWindow(t *testing.T) {
+	objective := observabilityv1alpha1.Objective{
+		Name:   "availability",
+		Target: 99.9,
+		Window: "30d",
+		Sli: observabilityv1alpha1.SLI{
+			Query: &observabilityv1alpha1.Query{
+				TotalQuery: "http_requests_total",
+				ErrorQuery: `http_requests_total{status=~"5.."}`,
+			},
+		},
+		Alerting: &observabilityv1alpha1.Alerting{
+			BurnRateAlerts: &observabilityv1alpha1.BurnRates{
+				Enabled: true,
+				Alerts: []observabilityv1alpha1.BurnRateAlert{
+					{
+						Name:           "TicketPage",
+						ConsumePercent: 2,
+						ConsumeWindow:  "1h",
+						LongWindow:     "12h",
+						ShortWindow:    "5m",
+						Severity:       "critical",
+					},
+				},
+			},
+		},
+	}
+
+	_, err := CreatePrometheusRule("checkout", "prod", objective)
+	if err == nil {
+		t.Fatalf("expected invalid custom longWindow to return an error")
+	}
+
+	if !strings.Contains(err.Error(), `longWindow "12h"`) {
+		t.Fatalf("expected error to mention invalid longWindow, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "5m, 1h, 6h, 3d, 7d, 30d") {
+		t.Fatalf("expected error to list valid recording windows, got: %v", err)
+	}
+}
+
+func TestPromQLLogicalOperatorsAreLowercaseAndWindowSafe(t *testing.T) {
+	errorRateExpr := sliErrorRateExpr("http_requests_total", `http_requests_total{status=~"5.."}`, "5m")
+	if strings.Contains(errorRateExpr, " OR ") {
+		t.Fatalf("expected lowercase or in SLI error rate expression, got: %s", errorRateExpr)
+	}
+	if !strings.Contains(errorRateExpr, " or ") {
+		t.Fatalf("expected SLI error rate expression to contain lowercase or, got: %s", errorRateExpr)
+	}
+
+	preset := burnRatePreset{
+		ShortWindow: "5m",
+		LongWindow:  "1h",
+		BurnRate:    14,
+	}
+
+	alertExpr := burnRateAlertExpr("checkout", "prod", "availability", preset)
+	if strings.Contains(alertExpr, " AND ") {
+		t.Fatalf("expected lowercase and in burn-rate alert expression, got: %s", alertExpr)
+	}
+	if !strings.Contains(alertExpr, " and on (slo_name, slo_namespace, objective_name) ") {
+		t.Fatalf("expected burn-rate alert expression to match on SLO identity labels, got: %s", alertExpr)
+	}
+
+	compositionExpr := burnRateAlertExprComposition("checkout-flow", "prod", preset)
+	if strings.Contains(compositionExpr, " AND ") {
+		t.Fatalf("expected lowercase and in burn-rate composition expression, got: %s", compositionExpr)
+	}
+	if !strings.Contains(compositionExpr, " and on (slo_composition_name, slo_composition_namespace) ") {
+		t.Fatalf("expected burn-rate composition expression to match on composition identity labels, got: %s", compositionExpr)
 	}
 }
