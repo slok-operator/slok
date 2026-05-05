@@ -2,6 +2,7 @@ package prometheus
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	observabilityv1alpha1 "github.com/federicolepera/slok/api/v1alpha1"
@@ -37,6 +38,110 @@ var defaultBurnRatePresets = []burnRatePreset{
 }
 
 const severityWarning = "warning"
+
+func isRecordingWindow(window string) bool {
+	for _, recordingWindow := range recordingWindows {
+		if window == recordingWindow {
+			return true
+		}
+	}
+
+	return false
+}
+
+func validateBurnRateAlertWindows(alert observabilityv1alpha1.BurnRateAlert) error {
+	validWindows := strings.Join(recordingWindows, ", ")
+
+	if !isRecordingWindow(alert.ShortWindow) {
+		return fmt.Errorf(
+			"invalid burn-rate alert %q: shortWindow %q must be one of the recording windows: %s",
+			alert.Name,
+			alert.ShortWindow,
+			validWindows,
+		)
+	}
+
+	if !isRecordingWindow(alert.LongWindow) {
+		return fmt.Errorf(
+			"invalid burn-rate alert %q: longWindow %q must be one of the recording windows: %s",
+			alert.Name,
+			alert.LongWindow,
+			validWindows,
+		)
+	}
+
+	return nil
+}
+
+func parseAlertWindowHours(window string) (float64, error) {
+	if len(window) < 2 {
+		return 0, fmt.Errorf("invalid duration %q", window)
+	}
+
+	value, err := strconv.ParseFloat(window[:len(window)-1], 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("invalid duration %q", window)
+	}
+
+	switch window[len(window)-1] {
+	case 'd':
+		return value * 24, nil
+	case 'h':
+		return value, nil
+	case 'm':
+		return value / 60, nil
+	case 's':
+		return value / 3600, nil
+	default:
+		return 0, fmt.Errorf("invalid duration %q", window)
+	}
+}
+
+func burnRateThreshold(alert observabilityv1alpha1.BurnRateAlert, sloWindow string) (float64, error) {
+	sloWindowHours, err := parseAlertWindowHours(sloWindow)
+	if err != nil {
+		return 0, fmt.Errorf("invalid SLO window: %w", err)
+	}
+
+	consumeWindowHours, err := parseAlertWindowHours(alert.ConsumeWindow)
+	if err != nil {
+		return 0, fmt.Errorf("invalid consume window: %w", err)
+	}
+
+	return (alert.ConsumePercent / 100) * sloWindowHours / consumeWindowHours, nil
+}
+
+func burnRatePresetsForObjective(objective observabilityv1alpha1.Objective) ([]burnRatePreset, error) {
+	if objective.Alerting == nil ||
+		objective.Alerting.BurnRateAlerts == nil ||
+		len(objective.Alerting.BurnRateAlerts.Alerts) == 0 {
+		return defaultBurnRatePresets, nil
+	}
+
+	burnRates := objective.Alerting.BurnRateAlerts
+	presets := make([]burnRatePreset, 0, len(burnRates.Alerts))
+
+	for _, alert := range burnRates.Alerts {
+		if err := validateBurnRateAlertWindows(alert); err != nil {
+			return nil, err
+		}
+
+		threshold, err := burnRateThreshold(alert, objective.Window)
+		if err != nil {
+			return nil, fmt.Errorf("invalid burn-rate alert %q: %w", alert.Name, err)
+		}
+
+		presets = append(presets, burnRatePreset{
+			ShortWindow: alert.ShortWindow,
+			LongWindow:  alert.LongWindow,
+			BurnRate:    threshold,
+			Severity:    alert.Severity,
+			AlertSuffix: alert.Name,
+		})
+	}
+
+	return presets, nil
+}
 
 // Windows for which we generate recording rules
 var recordingWindows = []string{"5m", "1h", "6h", "3d", "7d", "30d"}
@@ -345,6 +450,7 @@ func CreateAggregatedPrometheusRule(sloCompositionName, sloCompositionNamespace 
 		return monitoringv1.PrometheusRule{}, fmt.Errorf("unsupported composition type: %s", spec.Composition.Type)
 	}
 }
+
 func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv1alpha1.Objective) (monitoringv1.PrometheusRule, error) {
 	objectiveName := objective.Name
 
@@ -455,14 +561,18 @@ func CreatePrometheusRule(sloName, sloNamespace string, objective observabilityv
 		}
 	}
 
-	// Burn rate alerts using presets
+	// Burn rate alerts using defaults or custom objective config.
 	if objective.Alerting != nil && objective.Alerting.BurnRateAlerts != nil && objective.Alerting.BurnRateAlerts.Enabled {
 		alertGroup := monitoringv1.RuleGroup{
 			Name: fmt.Sprintf("slok.%s.%s-burnRateAlerts", sloName, objectiveName),
 		}
 
-		// Multi-window burn rate alerts from presets
-		for _, preset := range defaultBurnRatePresets {
+		presets, err := burnRatePresetsForObjective(objective)
+		if err != nil {
+			return monitoringv1.PrometheusRule{}, err
+		}
+
+		for _, preset := range presets {
 			alertGroup.Rules = append(alertGroup.Rules, monitoringv1.Rule{
 				Alert:  fmt.Sprintf("Objective: %s SLOBurnRateHigh - %s", objectiveName, preset.AlertSuffix),
 				Expr:   intstr.FromString(burnRateAlertExpr(sloName, sloNamespace, objectiveName, preset)),
